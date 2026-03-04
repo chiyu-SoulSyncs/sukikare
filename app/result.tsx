@@ -16,7 +16,7 @@ import * as Sharing from "expo-sharing";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
-import { generateMessage, type ToneLevel, type MessageFormat } from "@/lib/message-generator";
+import { generateMessage, type ToneLevel, type MessageFormat, type Signature } from "@/lib/message-generator";
 import type { FreeSlot } from "@/lib/google-calendar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -47,7 +47,7 @@ const TONE_OPTIONS: { label: string; value: ToneLevel; desc: string }[] = [
 ];
 
 const FORMAT_OPTIONS: { label: string; value: MessageFormat; desc: string; example: string }[] = [
-  { label: "LINEで送る", value: "line", desc: "絵文字付きシンプル", example: "📅 3/10(月) 10:00〜11:00" },
+  { label: "LINEで送る", value: "line", desc: "シンプル箇条書き", example: "● 3/10(月) 10:00〜11:00" },
   { label: "メールで送る", value: "mail", desc: "挨拶・件名付き", example: "● 3月10日（月） 10:00〜11:00" },
   { label: "そのままコピー", value: "plain", desc: "日程のみシンプル", example: "● 3/10(月) 10:00〜11:00" },
 ];
@@ -65,6 +65,29 @@ export default function ResultScreen() {
   const [tone, setTone] = useState<ToneLevel>("formal");
   const [format, setFormat] = useState<MessageFormat>("mail");
   const [copied, setCopied] = useState(false);
+
+  // 署名情報
+  const [sigCompany, setSigCompany] = useState("");
+  const [sigDept, setSigDept] = useState("");
+  const [sigName, setSigName] = useState("");
+
+  // 署名をAsyncStorageから読み込む
+  useEffect(() => {
+    AsyncStorage.getItem("mail_signature").then((raw) => {
+      if (!raw) return;
+      try {
+        const sig = JSON.parse(raw);
+        setSigCompany(sig.company ?? "");
+        setSigDept(sig.department ?? "");
+        setSigName(sig.name ?? "");
+      } catch {}
+    });
+  }, []);
+
+  // 署名変更時に自動保存
+  const saveSig = useCallback((company: string, department: string, name: string) => {
+    AsyncStorage.setItem("mail_signature", JSON.stringify({ company, department, name }));
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem("search_results").then((raw) => {
@@ -96,10 +119,16 @@ export default function ResultScreen() {
 
   const selectedSlotList = slots.filter((_, i) => selectedSlots.has(i));
 
+  const signature: Signature | undefined =
+    format === "mail" && (sigCompany.trim() || sigDept.trim() || sigName.trim())
+      ? { company: sigCompany.trim() || undefined, department: sigDept.trim() || undefined, name: sigName.trim() || undefined }
+      : undefined;
+
   const message = generateMessage({
     slots: selectedSlotList,
     toName: toName.trim() || undefined,
     subject: subject.trim() || undefined,
+    signature,
     toneLevel: tone,
     format,
     requiredDurationMinutes: requiredDuration,
@@ -245,6 +274,35 @@ export default function ResultScreen() {
                     placeholder="例：打ち合わせのご提案"
                     placeholderTextColor={c.border}
                     style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
+                    returnKeyType="done"
+                  />
+
+                  {/* 署名 */}
+                  <View style={[st.row, { marginTop: 16, marginBottom: 6 }]}>
+                    <Text style={{ fontSize: 12, color: c.muted, flex: 1 }}>署名（任意・自動保存）</Text>
+                  </View>
+                  <TextInput
+                    value={sigCompany}
+                    onChangeText={(v) => { setSigCompany(v); saveSig(v, sigDept, sigName); }}
+                    placeholder="会社名"
+                    placeholderTextColor={c.border}
+                    style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
+                    returnKeyType="next"
+                  />
+                  <TextInput
+                    value={sigDept}
+                    onChangeText={(v) => { setSigDept(v); saveSig(sigCompany, v, sigName); }}
+                    placeholder="部署名"
+                    placeholderTextColor={c.border}
+                    style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border, marginTop: 6 }]}
+                    returnKeyType="next"
+                  />
+                  <TextInput
+                    value={sigName}
+                    onChangeText={(v) => { setSigName(v); saveSig(sigCompany, sigDept, v); }}
+                    placeholder="氏名"
+                    placeholderTextColor={c.border}
+                    style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border, marginTop: 6 }]}
                     returnKeyType="done"
                   />
                 </>
