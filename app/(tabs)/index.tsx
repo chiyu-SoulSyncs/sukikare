@@ -23,6 +23,7 @@ import {
   type SearchSettings,
 } from "@/lib/google-calendar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadExclusionSettings } from "@/lib/exclusion-settings";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -193,11 +194,14 @@ export default function HomeScreen() {
     setIsSearching(true);
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const calendarIds = await loadSelectedCalendars(String(user.id));
+      const [calendarIds, exclusion] = await Promise.all([
+        loadSelectedCalendars(String(user.id)),
+        loadExclusionSettings(),
+      ]);
       const timeMin = new Date(weekDatesForSearch[0]); timeMin.setHours(0, 0, 0, 0);
       const timeMax = new Date(weekDatesForSearch[weekDatesForSearch.length - 1]); timeMax.setHours(23, 59, 59, 999);
       const events = await fetchEvents(String(user.id), calendarIds, timeMin, timeMax);
-      const slots = extractFreeSlots(weekDatesForSearch, events, quickSettings);
+      const slots = extractFreeSlots(weekDatesForSearch, events, { ...quickSettings, excludedWeekdays: exclusion.excludedWeekdays, excludedTimeRanges: exclusion.excludedTimeRanges });
       await AsyncStorage.setItem("search_results", JSON.stringify({
         slots: slots.map((s) => ({ start: s.start.toISOString(), end: s.end.toISOString(), durationMinutes: s.durationMinutes })),
         settings: quickSettings,
@@ -232,14 +236,17 @@ export default function HomeScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const calendarIds = await loadSelectedCalendars(String(user.id));
+      const [calendarIds, exclusion] = await Promise.all([
+        loadSelectedCalendars(String(user.id)),
+        loadExclusionSettings(),
+      ]);
       const timeMin = new Date(datesToSearch[0]);
       timeMin.setHours(0, 0, 0, 0);
       const timeMax = new Date(datesToSearch[datesToSearch.length - 1]);
       timeMax.setHours(23, 59, 59, 999);
 
       const events = await fetchEvents(String(user.id), calendarIds, timeMin, timeMax);
-      const slots = extractFreeSlots(datesToSearch, events, settings);
+      const slots = extractFreeSlots(datesToSearch, events, { ...settings, excludedWeekdays: exclusion.excludedWeekdays, excludedTimeRanges: exclusion.excludedTimeRanges });
 
       await AsyncStorage.setItem(
         "search_results",

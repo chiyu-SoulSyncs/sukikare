@@ -108,7 +108,7 @@ describe("generateMessage", () => {
       requiredDurationMinutes: 60,
     });
     expect(msg).toContain("お疲れ様です");
-    expect(msg).toContain("📅");
+    expect(msg).toContain("●"); // LINEフォーマットは●を使用
   });
 
   it("generates friendly (tame-guchi) message", () => {
@@ -153,5 +153,41 @@ describe("generateMessage", () => {
       requiredDurationMinutes: 60,
     });
     expect(msg).toContain("件名：打ち合わせのご提案");
+  });
+});
+
+describe("extractFreeSlots - exclusion settings", () => {
+  it("除外曜日をスキップする", () => {
+    // 2026-03-10 is Tuesday (day=2), 2026-03-14 is Saturday (day=6)
+    const tuesday = new Date(2026, 2, 10);
+    const saturday = new Date(2026, 2, 14);
+    const settings = { ...BASE_SETTINGS, excludedWeekdays: [6] }; // 土曜除外
+    const slots = extractFreeSlots([tuesday, saturday], [], settings);
+    // 火曜のスロットはあるが、土曜のスロットはない
+    const satSlots = slots.filter((s) => s.start.getDay() === 6);
+    expect(satSlots.length).toBe(0);
+    const tueSlots = slots.filter((s) => s.start.getDay() === 2);
+    expect(tueSlots.length).toBeGreaterThan(0);
+  });
+
+  it("除外時間帯をブロックする", () => {
+    const date = new Date(2026, 2, 10);
+    const settings = {
+      ...BASE_SETTINGS,
+      excludedTimeRanges: [{ startHour: 12, startMin: 0, endHour: 13, endMin: 0 }],
+    };
+    const slots = extractFreeSlots([date], [], settings);
+    // 12:00-13:00のスロットがないことを確認
+    const lunchSlots = slots.filter(
+      (s) => s.start.getHours() === 12 && s.start.getMinutes() === 0
+    );
+    expect(lunchSlots.length).toBe(0);
+  });
+
+  it("除外設定なしでは除外しない", () => {
+    const saturday = new Date(2026, 2, 14);
+    const settings = { ...BASE_SETTINGS }; // excludedWeekdaysなし
+    const slots = extractFreeSlots([saturday], [], settings);
+    expect(slots.length).toBeGreaterThan(0);
   });
 });

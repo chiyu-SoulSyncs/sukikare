@@ -12,6 +12,9 @@ export default defineConfig({
       },
     },
   },
+  define: {
+    __DEV__: JSON.stringify(false),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
@@ -19,6 +22,8 @@ export default defineConfig({
       "react-native": path.resolve(__dirname, "tests/__mocks__/react-native.ts"),
       "expo-linking": path.resolve(__dirname, "tests/__mocks__/expo-linking.ts"),
       "@react-native-async-storage/async-storage": path.resolve(__dirname, "tests/__mocks__/async-storage.ts"),
+      "expo-modules-core": path.resolve(__dirname, "tests/__mocks__/expo-modules-core.ts"),
+      "expo-web-browser": path.resolve(__dirname, "tests/__mocks__/expo-web-browser.ts"),
     },
   },
 });

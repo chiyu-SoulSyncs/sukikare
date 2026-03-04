@@ -160,6 +160,8 @@ export interface SearchSettings {
   requiredDurationMinutes: number;
   maxSlots: number; // 0 = unlimited
   startStepMinutes: 30 | 60; // 30 = 30分刻み（10:00, 10:30, 11:00...）, 60 = 正時のみ（10:00, 11:00...）
+  excludedWeekdays?: number[];  // 0=日〜6=土
+  excludedTimeRanges?: { startHour: number; startMin: number; endHour: number; endMin: number }[];
 }
 
 export function extractFreeSlots(
@@ -170,6 +172,8 @@ export function extractFreeSlots(
   const slots: FreeSlot[] = [];
 
   for (const date of dates) {
+    // 除外曜日はスキップ
+    if (settings.excludedWeekdays && settings.excludedWeekdays.includes(date.getDay())) continue;
     const daySlots = extractFreeSlotsForDay(date, events, settings);
     slots.push(...daySlots);
     if (settings.maxSlots > 0 && slots.length >= settings.maxSlots) break;
@@ -216,9 +220,21 @@ function extractFreeSlotsForDay(
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 
+  // 除外時間帯をbusy blockとして追加
+  const excludedBlocks: { start: Date; end: Date }[] = [];
+  if (settings.excludedTimeRanges) {
+    for (const range of settings.excludedTimeRanges) {
+      const blockStart = new Date(date);
+      blockStart.setHours(range.startHour, range.startMin, 0, 0);
+      const blockEnd = new Date(date);
+      blockEnd.setHours(range.endHour, range.endMin, 0, 0);
+      if (blockStart < blockEnd) excludedBlocks.push({ start: blockStart, end: blockEnd });
+    }
+  }
+
   // Merge overlapping events
   const merged: { start: Date; end: Date }[] = [];
-  for (const ev of dayEvents) {
+  for (const ev of [...dayEvents, ...excludedBlocks]) {
     const clampedStart = ev.start < dayStart ? dayStart : ev.start;
     const clampedEnd = ev.end > dayEnd ? dayEnd : ev.end;
     if (clampedStart >= clampedEnd) continue;

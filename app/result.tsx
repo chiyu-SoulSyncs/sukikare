@@ -8,6 +8,8 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  Modal,
+  FlatList,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -19,6 +21,12 @@ import { useColors } from "@/hooks/use-colors";
 import { generateMessage, type ToneLevel, type MessageFormat, type Signature } from "@/lib/message-generator";
 import type { FreeSlot } from "@/lib/google-calendar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  loadTemplates,
+  saveTemplate,
+  deleteTemplate,
+  type MessageTemplate,
+} from "@/lib/exclusion-settings";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -52,6 +60,16 @@ const FORMAT_OPTIONS: { label: string; value: MessageFormat; desc: string; examp
   { label: "そのままコピー", value: "plain", desc: "日程のみシンプル", example: "● 3/10(月) 10:00〜11:00" },
 ];
 
+const FORMAT_LABELS: Record<MessageFormat, string> = {
+  line: "LINE",
+  mail: "メール",
+  plain: "コピー",
+};
+
+function genId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
 export default function ResultScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -73,7 +91,12 @@ export default function ResultScreen() {
   const [sigDept, setSigDept] = useState("");
   const [sigName, setSigName] = useState("");
 
-  // 署名をAsyncStorageから読み込む
+  // テンプレート
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
   useEffect(() => {
     AsyncStorage.getItem("mail_signature").then((raw) => {
       if (!raw) return;
@@ -84,9 +107,9 @@ export default function ResultScreen() {
         setSigName(sig.name ?? "");
       } catch {}
     });
+    loadTemplates().then(setTemplates);
   }, []);
 
-  // 署名変更時に自動保存
   const saveSig = useCallback((company: string, department: string, name: string) => {
     AsyncStorage.setItem("mail_signature", JSON.stringify({ company, department, name }));
   }, []);
@@ -103,7 +126,6 @@ export default function ResultScreen() {
         }));
         setSlots(parsed);
         setRequiredDuration(data.settings?.requiredDurationMinutes ?? 60);
-        // Select all by default
         setSelectedSlots(new Set(parsed.map((_, i) => i)));
       } catch {}
     });
@@ -136,10 +158,8 @@ export default function ResultScreen() {
     requiredDurationMinutes: requiredDuration,
   });
 
-  // 編集中は editedMessage、それ以外は自動生成を使用
   const message = editedMessage ?? generatedMessage;
 
-  // 設定変更時は編集内容をリセット
   const prevSettingsRef = useRef({ format, tone, toName, subject, sigCompany, sigDept, sigName });
   useEffect(() => {
     const prev = prevSettingsRef.current;
@@ -173,7 +193,6 @@ export default function ResultScreen() {
     }
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
-      // Write to temp file for sharing
       const FileSystem = await import("expo-file-system/legacy");
       const path = (FileSystem.cacheDirectory ?? "") + "schedule.txt";
       await FileSystem.writeAsStringAsync(path, message);
@@ -183,7 +202,56 @@ export default function ResultScreen() {
     }
   }, [message]);
 
+  // テンプレート保存
+  const handleSaveTemplate = useCallback(async () => {
+    if (!templateName.trim()) {
+      Alert.alert("エラー", "テンプレート名を入力してください");
+      return;
+    }
+    const tmpl: MessageTemplate = {
+      id: genId(),
+      name: templateName.trim(),
+      format,
+      content: message,
+      createdAt: new Date().toISOString(),
+    };
+    await saveTemplate(tmpl);
+    const updated = await loadTemplates();
+    setTemplates(updated);
+    setShowSaveModal(false);
+    setTemplateName("");
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("保存しました", `「${tmpl.name}」をテンプレートとして保存しました`);
+  }, [templateName, format, message]);
+
+  // テンプレート適用
+  const handleApplyTemplate = useCallback((tmpl: MessageTemplate) => {
+    setEditedMessage(tmpl.content);
+    setIsEditing(false);
+    setShowTemplateModal(false);
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, []);
+
+  // テンプレート削除
+  const handleDeleteTemplate = useCallback(async (id: string, name: string) => {
+    const doDelete = async () => {
+      await deleteTemplate(id);
+      const updated = await loadTemplates();
+      setTemplates(updated);
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm(`「${name}」を削除しますか？`)) doDelete();
+    } else {
+      Alert.alert("削除", `「${name}」を削除しますか？`, [
+        { text: "キャンセル", style: "cancel" },
+        { text: "削除", style: "destructive", onPress: doDelete },
+      ]);
+    }
+  }, []);
+
   const c = colors;
+  const filteredTemplates = templates.filter((t) => t.format === format);
 
   return (
     <ScreenContainer containerClassName="bg-background">
@@ -228,9 +296,7 @@ export default function ResultScreen() {
                   ]}
                   onPress={() => toggleSlot(i)}
                 >
-                  {/* ● インジケータ */}
                   <Text style={{ fontSize: 18, color: isSelected ? c.primary : c.border, marginRight: 12, lineHeight: 22 }}>●</Text>
-                  {/* 日付（大）・時間（小）の2段組み */}
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 15, fontWeight: "700", color: isSelected ? c.primary : c.foreground, lineHeight: 20 }}>
                       {formatSlotDate(slot)}
@@ -239,7 +305,6 @@ export default function ResultScreen() {
                       {formatSlotTime(slot)}
                     </Text>
                   </View>
-                  {/* チェックマーク */}
                   <View style={[{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: "center", justifyContent: "center" }, isSelected ? { backgroundColor: c.primary, borderColor: c.primary } : { borderColor: c.border }]}>
                     {isSelected && <IconSymbol name="checkmark" size={13} color="#fff" />}
                   </View>
@@ -253,7 +318,7 @@ export default function ResultScreen() {
         <View style={[st.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           <Text style={{ fontSize: 14, fontWeight: "600", color: c.muted, marginBottom: 12 }}>メッセージ設定</Text>
 
-          {/* Format - 先頭に移動 */}
+          {/* Format */}
           <Text style={{ fontSize: 12, color: c.muted, marginBottom: 8 }}>送る先</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             {FORMAT_OPTIONS.map((opt) => (
@@ -267,12 +332,11 @@ export default function ResultScreen() {
                 onPress={() => setFormat(opt.value)}
               >
                 <Text style={{ fontSize: 11, fontWeight: "700", color: format === opt.value ? "#fff" : c.foreground }}>{opt.label}</Text>
-                <Text style={{ fontSize: 9, color: format === opt.value ? "rgba(255,255,255,0.7)" : c.muted, marginTop: 2 }}>{opt.example}</Text>
+                <Text style={{ fontSize: 10, color: format === opt.value ? "rgba(255,255,255,0.8)" : c.muted, marginTop: 2 }}>{opt.desc}</Text>
               </Pressable>
             ))}
           </View>
 
-          {/* plain以外のみ: 宛先・件名・敬語レベルを表示 */}
           {format !== "plain" && (
             <>
               <Text style={{ fontSize: 12, color: c.muted, marginBottom: 4, marginTop: 16 }}>宛先（任意）</Text>
@@ -296,8 +360,6 @@ export default function ResultScreen() {
                     style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
                     returnKeyType="done"
                   />
-
-                  {/* 署名 */}
                   <View style={[st.row, { marginTop: 16, marginBottom: 6 }]}>
                     <Text style={{ fontSize: 12, color: c.muted, flex: 1 }}>署名（任意・自動保存）</Text>
                   </View>
@@ -351,7 +413,8 @@ export default function ResultScreen() {
 
         {/* Generated Message Preview */}
         <View style={[st.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <View style={[st.row, { justifyContent: "space-between", marginBottom: 12 }]}>
+          {/* ヘッダー行 */}
+          <View style={[st.row, { justifyContent: "space-between", marginBottom: 10 }]}>
             <View style={st.row}>
               <Text style={{ fontSize: 14, fontWeight: "600", color: c.muted }}>生成メッセージ</Text>
               {editedMessage !== null && (
@@ -360,9 +423,20 @@ export default function ResultScreen() {
                 </View>
               )}
             </View>
-            <View style={[st.row, { gap: 8 }]}>
+            <View style={[st.row, { gap: 6 }]}>
+              {/* テンプレート */}
               <Pressable
-                style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: isEditing ? c.primary : c.tealLight }, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 20, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+                onPress={() => setShowTemplateModal(true)}
+              >
+                <IconSymbol name="doc.text" size={14} color={c.primary} />
+                <Text style={{ fontSize: 12, color: c.primary, fontWeight: "600" }}>
+                  テンプレ{filteredTemplates.length > 0 ? `(${filteredTemplates.length})` : ""}
+                </Text>
+              </Pressable>
+              {/* 編集 */}
+              <Pressable
+                style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 20, backgroundColor: isEditing ? c.primary : c.tealLight }, pressed && { opacity: 0.7 }]}
                 onPress={() => {
                   if (isEditing) {
                     setIsEditing(false);
@@ -373,32 +447,12 @@ export default function ResultScreen() {
                 }}
               >
                 <IconSymbol name={isEditing ? "checkmark" : "pencil"} size={14} color={isEditing ? "#fff" : c.primary} />
-                <Text style={{ fontSize: 13, color: isEditing ? "#fff" : c.primary, fontWeight: "600" }}>{isEditing ? "確定" : "編集"}</Text>
-              </Pressable>
-              {editedMessage !== null && !isEditing && (
-                <Pressable
-                  style={({ pressed }) => [{ paddingHorizontal: 8, paddingVertical: 6, borderRadius: 20, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
-                  onPress={() => { setEditedMessage(null); setIsEditing(false); }}
-                >
-                  <Text style={{ fontSize: 12, color: c.muted }}>リセット</Text>
-                </Pressable>
-              )}
-              <Pressable
-                style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
-                onPress={handleShare}
-              >
-                <IconSymbol name="square.and.arrow.up" size={16} color={c.primary} />
-                <Text style={{ fontSize: 13, color: c.primary, fontWeight: "600" }}>共有</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: copied ? c.success : c.primary }, pressed && { opacity: 0.8 }]}
-                onPress={handleCopy}
-              >
-                <IconSymbol name="doc.on.doc" size={16} color="#fff" />
-                <Text style={{ fontSize: 13, color: "#fff", fontWeight: "700" }}>{copied ? "コピー済！" : "コピー"}</Text>
+                <Text style={{ fontSize: 12, color: isEditing ? "#fff" : c.primary, fontWeight: "600" }}>{isEditing ? "確定" : "編集"}</Text>
               </Pressable>
             </View>
           </View>
+
+          {/* メッセージ本文 */}
           {isEditing ? (
             <TextInput
               value={editedMessage ?? generatedMessage}
@@ -415,9 +469,141 @@ export default function ResultScreen() {
               <Text style={{ fontSize: 14, color: c.foreground, lineHeight: 22 }}>{message}</Text>
             </View>
           )}
+
+          {/* アクションボタン行 */}
+          <View style={[st.row, { gap: 8, marginTop: 12, flexWrap: "wrap" }]}>
+            {editedMessage !== null && !isEditing && (
+              <Pressable
+                style={({ pressed }) => [{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+                onPress={() => { setEditedMessage(null); setIsEditing(false); }}
+              >
+                <Text style={{ fontSize: 12, color: c.muted }}>リセット</Text>
+              </Pressable>
+            )}
+            {/* テンプレートとして保存 */}
+            <Pressable
+              style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+              onPress={() => { setTemplateName(""); setShowSaveModal(true); }}
+            >
+              <IconSymbol name="bookmark" size={14} color={c.primary} />
+              <Text style={{ fontSize: 12, color: c.primary, fontWeight: "600" }}>テンプレ保存</Text>
+            </Pressable>
+            <View style={{ flex: 1 }} />
+            <Pressable
+              style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+              onPress={handleShare}
+            >
+              <IconSymbol name="square.and.arrow.up" size={14} color={c.primary} />
+              <Text style={{ fontSize: 12, color: c.primary, fontWeight: "600" }}>共有</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: copied ? c.success : c.primary }, pressed && { opacity: 0.8 }]}
+              onPress={handleCopy}
+            >
+              <IconSymbol name="doc.on.doc" size={14} color="#fff" />
+              <Text style={{ fontSize: 13, color: "#fff", fontWeight: "700" }}>{copied ? "コピー済！" : "コピー"}</Text>
+            </Pressable>
+          </View>
         </View>
 
       </ScrollView>
+
+      {/* テンプレート一覧モーダル */}
+      <Modal
+        visible={showTemplateModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowTemplateModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: c.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, maxHeight: "75%" }}>
+            <View style={[st.row, { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, justifyContent: "space-between" }]}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: c.foreground }}>
+                テンプレート一覧（{FORMAT_LABELS[format]}）
+              </Text>
+              <Pressable
+                style={({ pressed }) => [{ padding: 6, borderRadius: 10, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+                onPress={() => setShowTemplateModal(false)}
+              >
+                <IconSymbol name="xmark" size={18} color={c.muted} />
+              </Pressable>
+            </View>
+            {filteredTemplates.length === 0 ? (
+              <View style={{ alignItems: "center", paddingVertical: 40 }}>
+                <Text style={{ fontSize: 14, color: c.muted }}>保存済みのテンプレートはありません</Text>
+                <Text style={{ fontSize: 12, color: c.muted, marginTop: 6 }}>「テンプレ保存」ボタンで保存できます</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredTemplates}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
+                renderItem={({ item }) => (
+                  <View style={[st.row, { backgroundColor: c.surface, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: c.border }]}>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: c.foreground, marginBottom: 4 }}>{item.name}</Text>
+                      <Text style={{ fontSize: 12, color: c.muted, lineHeight: 18 }} numberOfLines={3}>{item.content}</Text>
+                    </View>
+                    <View style={{ gap: 8 }}>
+                      <Pressable
+                        style={({ pressed }) => [{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: c.primary }, pressed && { opacity: 0.8 }]}
+                        onPress={() => handleApplyTemplate(item)}
+                      >
+                        <Text style={{ fontSize: 12, color: "#fff", fontWeight: "700" }}>使う</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+                        onPress={() => handleDeleteTemplate(item.id, item.name)}
+                      >
+                        <Text style={{ fontSize: 12, color: c.error, fontWeight: "600" }}>削除</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* テンプレート保存モーダル */}
+      <Modal
+        visible={showSaveModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSaveModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", paddingHorizontal: 24 }}>
+          <View style={{ backgroundColor: c.background, borderRadius: 20, padding: 24 }}>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: c.foreground, marginBottom: 16 }}>テンプレートとして保存</Text>
+            <Text style={{ fontSize: 12, color: c.muted, marginBottom: 6 }}>テンプレート名</Text>
+            <TextInput
+              value={templateName}
+              onChangeText={setTemplateName}
+              placeholder="例：ビジネス丁寧語・メール"
+              placeholderTextColor={c.border}
+              style={[st.input, { color: c.foreground, backgroundColor: c.surface, borderColor: c.border, marginBottom: 16 }]}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSaveTemplate}
+            />
+            <View style={[st.row, { gap: 10 }]}>
+              <Pressable
+                style={({ pressed }) => [{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: "center", backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }, pressed && { opacity: 0.7 }]}
+                onPress={() => setShowSaveModal(false)}
+              >
+                <Text style={{ fontSize: 14, color: c.muted, fontWeight: "600" }}>キャンセル</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: "center", backgroundColor: c.primary }, pressed && { opacity: 0.85 }]}
+                onPress={handleSaveTemplate}
+              >
+                <Text style={{ fontSize: 14, color: "#fff", fontWeight: "700" }}>保存する</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }

@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   Pressable,
+  TextInput,
   StyleSheet,
   ActivityIndicator,
   Platform,
@@ -24,6 +25,24 @@ import {
   loadSelectedCalendars,
   type GoogleCalendar,
 } from "@/lib/google-calendar";
+import {
+  loadExclusionSettings,
+  saveExclusionSettings,
+  type ExclusionSettings,
+  type ExcludedTimeRange,
+  DEFAULT_EXCLUSION,
+} from "@/lib/exclusion-settings";
+
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
+
+function genId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function formatHM(hour: number, min: number) {
+  return `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
 
 export default function SettingsScreen() {
   const colors = useColors();
@@ -36,6 +55,56 @@ export default function SettingsScreen() {
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(["primary"]);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
 
+  // 除外設定
+  const [exclusion, setExclusion] = useState<ExclusionSettings>(DEFAULT_EXCLUSION);
+  const [showAddRange, setShowAddRange] = useState(false);
+  const [newRangeStartH, setNewRangeStartH] = useState(12);
+  const [newRangeStartM, setNewRangeStartM] = useState(0);
+  const [newRangeEndH, setNewRangeEndH] = useState(13);
+  const [newRangeEndM, setNewRangeEndM] = useState(0);
+  const [newRangeLabel, setNewRangeLabel] = useState("");
+
+  useEffect(() => {
+    loadExclusionSettings().then(setExclusion);
+  }, []);
+
+  const updateExclusion = useCallback(async (next: ExclusionSettings) => {
+    setExclusion(next);
+    await saveExclusionSettings(next);
+  }, []);
+
+  const toggleWeekday = useCallback(async (day: number) => {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const next = exclusion.excludedWeekdays.includes(day)
+      ? exclusion.excludedWeekdays.filter((d) => d !== day)
+      : [...exclusion.excludedWeekdays, day];
+    await updateExclusion({ ...exclusion, excludedWeekdays: next });
+  }, [exclusion, updateExclusion]);
+
+  const addTimeRange = useCallback(async () => {
+    if (newRangeStartH * 60 + newRangeStartM >= newRangeEndH * 60 + newRangeEndM) {
+      Alert.alert("エラー", "終了時刻は開始時刻より後にしてください");
+      return;
+    }
+    const range: ExcludedTimeRange = {
+      id: genId(),
+      startHour: newRangeStartH,
+      startMin: newRangeStartM,
+      endHour: newRangeEndH,
+      endMin: newRangeEndM,
+      label: newRangeLabel.trim() || undefined,
+    };
+    await updateExclusion({ ...exclusion, excludedTimeRanges: [...exclusion.excludedTimeRanges, range] });
+    setShowAddRange(false);
+    setNewRangeLabel("");
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [exclusion, newRangeStartH, newRangeStartM, newRangeEndH, newRangeEndM, newRangeLabel, updateExclusion]);
+
+  const removeTimeRange = useCallback(async (id: string) => {
+    await updateExclusion({ ...exclusion, excludedTimeRanges: exclusion.excludedTimeRanges.filter((r) => r.id !== id) });
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [exclusion, updateExclusion]);
+
   const loadData = useCallback(async () => {
     if (!user) return;
     setCheckingGoogle(true);
@@ -44,10 +113,10 @@ export default function SettingsScreen() {
       setGoogleConnected(connected);
       if (connected) {
         setLoadingCalendars(true);
-          const [cals, savedIds] = await Promise.all([
-            fetchCalendars(String(user.id)),
-            loadSelectedCalendars(String(user.id)),
-          ]);
+        const [cals, savedIds] = await Promise.all([
+          fetchCalendars(String(user.id)),
+          loadSelectedCalendars(String(user.id)),
+        ]);
         setCalendars(cals);
         setSelectedCalendarIds(savedIds);
       }
@@ -63,7 +132,6 @@ export default function SettingsScreen() {
     if (isAuthenticated && user) loadData();
   }, [isAuthenticated, user, loadData]);
 
-  // Handle return from Google OAuth
   useEffect(() => {
     if (Platform.OS === "web" && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -77,10 +145,7 @@ export default function SettingsScreen() {
   const handleConnectGoogle = useCallback(async () => {
     if (!user) return;
     const success = await startGoogleAuth(String(user.id));
-    // Nativeの場合、認証成功後にデータを再読み込み
-    if (success) {
-      await loadData();
-    }
+    if (success) await loadData();
   }, [user, loadData]);
 
   const handleDisconnectGoogle = useCallback(() => {
@@ -108,7 +173,7 @@ export default function SettingsScreen() {
       : [...selectedCalendarIds, calId];
     setSelectedCalendarIds(next);
     await saveSelectedCalendars(next, user ? String(user.id) : undefined);
-  }, [selectedCalendarIds]);
+  }, [selectedCalendarIds, user]);
 
   const c = colors;
 
@@ -132,7 +197,6 @@ export default function SettingsScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 60 }}
       >
-
         {/* Header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>
           <Text style={{ fontSize: 18, fontWeight: "700", color: c.foreground }}>設定</Text>
@@ -166,6 +230,163 @@ export default function SettingsScreen() {
           </View>
         )}
 
+        {/* 除外設定セクション */}
+        <Text style={st.sectionTitle(c)}>検索から除外する設定</Text>
+        <View style={[st.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+          {/* 除外曜日 */}
+          <Text style={{ fontSize: 13, fontWeight: "600", color: c.muted, marginBottom: 10 }}>除外する曜日</Text>
+          <View style={{ flexDirection: "row", gap: 6, marginBottom: 16 }}>
+            {WEEKDAY_LABELS.map((label, day) => {
+              const isExcluded = exclusion.excludedWeekdays.includes(day);
+              const isSunSat = day === 0 || day === 6;
+              return (
+                <Pressable
+                  key={day}
+                  style={({ pressed }) => [
+                    { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center", borderWidth: 1.5 },
+                    isExcluded
+                      ? { backgroundColor: c.error, borderColor: c.error }
+                      : isSunSat
+                      ? { backgroundColor: c.background, borderColor: c.border }
+                      : { backgroundColor: c.background, borderColor: c.border },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => toggleWeekday(day)}
+                >
+                  <Text style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: isExcluded ? "#fff" : isSunSat ? c.error : c.foreground,
+                  }}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* 除外時間帯 */}
+          <View style={[st.row, { justifyContent: "space-between", marginBottom: 10 }]}>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: c.muted }}>除外する時間帯</Text>
+            <Pressable
+              style={({ pressed }) => [st.row, { gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+              onPress={() => setShowAddRange((v) => !v)}
+            >
+              <IconSymbol name={showAddRange ? "xmark" : "plus"} size={14} color={c.primary} />
+              <Text style={{ fontSize: 12, color: c.primary, fontWeight: "600" }}>{showAddRange ? "キャンセル" : "追加"}</Text>
+            </Pressable>
+          </View>
+
+          {exclusion.excludedTimeRanges.length === 0 && !showAddRange && (
+            <Text style={{ fontSize: 13, color: c.muted, marginBottom: 4 }}>除外する時間帯はありません</Text>
+          )}
+
+          {exclusion.excludedTimeRanges.map((range) => (
+            <View key={range.id} style={[st.row, { backgroundColor: c.background, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 6, borderWidth: 1, borderColor: c.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: c.foreground }}>
+                  {formatHM(range.startHour, range.startMin)} 〜 {formatHM(range.endHour, range.endMin)}
+                </Text>
+                {range.label && (
+                  <Text style={{ fontSize: 12, color: c.muted, marginTop: 2 }}>{range.label}</Text>
+                )}
+              </View>
+              <Pressable
+                style={({ pressed }) => [{ padding: 6, borderRadius: 8, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+                onPress={() => removeTimeRange(range.id)}
+              >
+                <IconSymbol name="trash" size={16} color={c.error} />
+              </Pressable>
+            </View>
+          ))}
+
+          {/* 時間帯追加フォーム */}
+          {showAddRange && (
+            <View style={{ backgroundColor: c.background, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: c.primary, marginTop: 4 }}>
+              <Text style={{ fontSize: 12, color: c.muted, marginBottom: 8 }}>ラベル（任意）</Text>
+              <TextInput
+                value={newRangeLabel}
+                onChangeText={setNewRangeLabel}
+                placeholder="例：ランチ、会議"
+                placeholderTextColor={c.border}
+                style={[st.input(c), { marginBottom: 12 }]}
+                returnKeyType="done"
+              />
+              <View style={[st.row, { gap: 12, marginBottom: 12 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: c.muted, marginBottom: 6 }}>開始時刻</Text>
+                  <View style={[st.row, { gap: 6 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, color: c.muted, marginBottom: 4, textAlign: "center" }}>時</Text>
+                      <ScrollView style={{ height: 80, borderWidth: 1, borderColor: c.border, borderRadius: 8 }} showsVerticalScrollIndicator={false}>
+                        {HOUR_OPTIONS.map((h) => (
+                          <Pressable
+                            key={h}
+                            style={({ pressed }) => [{ paddingVertical: 6, alignItems: "center", borderRadius: 6 }, newRangeStartH === h && { backgroundColor: c.primary }, pressed && { opacity: 0.7 }]}
+                            onPress={() => setNewRangeStartH(h)}
+                          >
+                            <Text style={{ fontSize: 13, color: newRangeStartH === h ? "#fff" : c.foreground, fontWeight: newRangeStartH === h ? "700" : "400" }}>{String(h).padStart(2, "0")}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, color: c.muted, marginBottom: 4, textAlign: "center" }}>分</Text>
+                      {[0, 30].map((m) => (
+                        <Pressable
+                          key={m}
+                          style={({ pressed }) => [{ paddingVertical: 8, alignItems: "center", borderRadius: 8, borderWidth: 1, marginBottom: 4 }, newRangeStartM === m ? { backgroundColor: c.primary, borderColor: c.primary } : { borderColor: c.border }, pressed && { opacity: 0.7 }]}
+                          onPress={() => setNewRangeStartM(m)}
+                        >
+                          <Text style={{ fontSize: 13, color: newRangeStartM === m ? "#fff" : c.foreground, fontWeight: "600" }}>{String(m).padStart(2, "0")}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 18, color: c.muted, alignSelf: "center", marginTop: 16 }}>〜</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, color: c.muted, marginBottom: 6 }}>終了時刻</Text>
+                  <View style={[st.row, { gap: 6 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, color: c.muted, marginBottom: 4, textAlign: "center" }}>時</Text>
+                      <ScrollView style={{ height: 80, borderWidth: 1, borderColor: c.border, borderRadius: 8 }} showsVerticalScrollIndicator={false}>
+                        {HOUR_OPTIONS.map((h) => (
+                          <Pressable
+                            key={h}
+                            style={({ pressed }) => [{ paddingVertical: 6, alignItems: "center", borderRadius: 6 }, newRangeEndH === h && { backgroundColor: c.primary }, pressed && { opacity: 0.7 }]}
+                            onPress={() => setNewRangeEndH(h)}
+                          >
+                            <Text style={{ fontSize: 13, color: newRangeEndH === h ? "#fff" : c.foreground, fontWeight: newRangeEndH === h ? "700" : "400" }}>{String(h).padStart(2, "0")}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 11, color: c.muted, marginBottom: 4, textAlign: "center" }}>分</Text>
+                      {[0, 30].map((m) => (
+                        <Pressable
+                          key={m}
+                          style={({ pressed }) => [{ paddingVertical: 8, alignItems: "center", borderRadius: 8, borderWidth: 1, marginBottom: 4 }, newRangeEndM === m ? { backgroundColor: c.primary, borderColor: c.primary } : { borderColor: c.border }, pressed && { opacity: 0.7 }]}
+                          onPress={() => setNewRangeEndM(m)}
+                        >
+                          <Text style={{ fontSize: 13, color: newRangeEndM === m ? "#fff" : c.foreground, fontWeight: "600" }}>{String(m).padStart(2, "0")}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </View>
+              <Pressable
+                style={({ pressed }) => [{ backgroundColor: c.primary, paddingVertical: 12, borderRadius: 12, alignItems: "center" }, pressed && { opacity: 0.85 }]}
+                onPress={addTimeRange}
+              >
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>この時間帯を除外する</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+
         {/* Google Calendar Section */}
         {isAuthenticated && (
           <>
@@ -188,8 +409,6 @@ export default function SettingsScreen() {
                       <Text style={{ fontSize: 12, color: c.error, fontWeight: "600" }}>解除</Text>
                     </Pressable>
                   </View>
-
-                  {/* Calendar Selection */}
                   <Text style={{ fontSize: 13, fontWeight: "600", color: c.muted, marginBottom: 10 }}>使用するカレンダー</Text>
                   {loadingCalendars ? (
                     <ActivityIndicator color={c.primary} style={{ marginVertical: 12 }} />
@@ -250,7 +469,6 @@ export default function SettingsScreen() {
             </View>
           ))}
         </View>
-
       </ScrollView>
     </ScreenContainer>
   );
@@ -268,5 +486,15 @@ const st = {
     marginHorizontal: 20,
     marginBottom: 8,
     marginTop: 8,
+  }),
+  input: (c: any) => ({
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: c.foreground,
+    backgroundColor: c.background,
+    borderColor: c.border,
   }),
 };
