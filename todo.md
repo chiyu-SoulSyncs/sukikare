@@ -90,3 +90,4 @@
 - [x] プリセットタブを削除（presets.tsx・lib/presets.ts・関連DBテーブル・tRPCルートを安全に削除）
 - [x] ホーム画面にクイック検索ボタンを追加（今週の空き・来週の午前・来週の午後など）
 - [x] 検索設定の自動引き継ぎ（所要時間・時間帯・開始刻みをAsyncStorageに保存して次回起動時に復元）
+- [x] 挨拶文メーカー：署名ON/OFFトグルを切り替えても生成メッセージが変わらないバグを修正（useCallbackの依存配列にincludeSignature・replyStyleを追加）

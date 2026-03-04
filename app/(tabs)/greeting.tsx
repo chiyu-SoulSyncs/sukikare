@@ -219,7 +219,7 @@ export default function GreetingScreen() {
     setEditedMessage(null);
     setIsEditing(false);
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [selectedCard, scene, tone, recipientName, meetingPurpose, meetingDate, meetingTime, meetingUrl, nextAction, theirAction]);
+  }, [selectedCard, scene, tone, recipientName, meetingPurpose, meetingDate, meetingTime, meetingUrl, nextAction, theirAction, includeSignature, replyStyle]);
 
   const displayMessage = editedMessage ?? generated;
 
