@@ -32,7 +32,7 @@ const env = {
   appSlug: "schedule-assistant",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663132666890/2vgQBexbqjFH4E2F67Hr6f/icon-ArE6VcGCZx8ZTCK862GHMB.png",
+  logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663132666890/ZsdwKCGkJcAoiQyo.png",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
