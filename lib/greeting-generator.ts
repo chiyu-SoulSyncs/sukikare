@@ -21,6 +21,15 @@ export type GreetingTone = "formal" | "casual" | "friendly";
 /** 返信文の種類 */
 export type ReplyStyle = "kashikomarimashita" | "shochishimashita";
 
+/** 返信シーンの状況分岐 */
+export type ReplySubtype =
+  | "confirmed"      // 日程が決まった
+  | "reschedule"     // 別候補を依頼
+  | "declined"       // 断られた
+  | "pending"        // 保留・検討中
+  | "self_decline"   // こちらから辞辺
+  | "change_request"; // 日程変更の依頼
+
 export interface ProfileCard {
   id: number;
   label: string;
@@ -56,6 +65,12 @@ export interface GenerateGreetingOptions {
   includeSignature?: boolean;
   /** 返信文のスタイル（replyシーンのみ使用） */
   replyStyle?: ReplyStyle;
+  /** 返信シーンの状況分岐 */
+  replySubtype?: ReplySubtype;
+  /** 日程確定時の確定日時テキスト */
+  confirmedDate?: string;
+  /** 日程変更依頼時の変更後候補テキスト */
+  newScheduleText?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -243,20 +258,95 @@ function buildNext(opts: GenerateGreetingOptions): string {
 }
 
 function buildReply(opts: GenerateGreetingOptions): string {
-  const { profile, tone, replyStyle = "kashikomarimashita", includeSignature = true } = opts;
+  const {
+    profile, tone,
+    replyStyle = "kashikomarimashita",
+    replySubtype = "confirmed",
+    confirmedDate,
+    newScheduleText,
+    includeSignature = true,
+  } = opts;
   const sig = maybeSignature(profile, tone, includeSignature);
-
-  // 返信文の種類に応じた文言
   const ack = replyStyle === "shochishimashita" ? "承知しました。" : "かしこまりました。";
   const ackCasual = replyStyle === "shochishimashita" ? "承知しました！" : "了解しました！";
 
+  // 日程確定
+  if (replySubtype === "confirmed") {
+    const dateStr = confirmedDate?.trim() ? `\n\n以下の通りでご入力ください。\n${confirmedDate.trim()}` : "";
+    if (tone === "formal") {
+      return `ご連絡ありがとうございます。\n${ack}${dateStr ? `\n\n${confirmedDate?.trim()}にてお待ちしております。` : ""}\n引き続きどうぞよろしくお願いいたします。${sig}`;
+    }
+    if (tone === "casual") {
+      return `ご連絡ありがとうございます！\n${ackCasual}${confirmedDate?.trim() ? `\n${confirmedDate.trim()}でお待ちしています！` : ""}\n引き続きよろしくお願いします！${sig}`;
+    }
+    return `了解〜！${confirmedDate?.trim() ? `\n${confirmedDate.trim()}ね！` : ""}\nよろしくね！${sig}`;
+  }
+
+  // 別候補を依頼
+  if (replySubtype === "reschedule") {
+    const slotsBlock = newScheduleText?.trim() ? `\n\n${newScheduleText.trim()}` : "";
+    if (tone === "formal") {
+      return `ご連絡ありがとうございます。\nご都合が合わず、大変申し訳ございません。\n改めて以下の日程でご都合はいかがでしょうか。${slotsBlock}\n\nお手数ですが、ご確認いただけますと幸いです。\n${closing(tone)}${sig}`;
+    }
+    if (tone === "casual") {
+      return `ご連絡ありがとうございます！\n日程が合わず申し訳ございません。\n改めて候補日程をご提案させていただきます！${slotsBlock}\n\n${closing(tone)}${sig}`;
+    }
+    return `日程合わなかった、ごめん！\n別の候補だとこれはどう？${slotsBlock}\n\n${closing(tone)}${sig}`;
+  }
+
+  // 断られた
+  if (replySubtype === "declined") {
+    if (tone === "formal") {
+      return `ご連絡ありがとうございます。\nご丁重なお返事をいただき、誠にありがとうございます。\nまたの機会にご一緒できますことを楽しみにしております。\n今後ともどうぞよろしくお願いいたします。${sig}`;
+    }
+    if (tone === "casual") {
+      return `ご連絡ありがとうございます！\nご丁重にご返事いただきありがとうございます。\nまたの機会によろしくお願いします！${sig}`;
+    }
+    return `返事ありがとう！\nまた機会があればよろしくね！${sig}`;
+  }
+
+  // 保留・検討中
+  if (replySubtype === "pending") {
+    if (tone === "formal") {
+      return `ご連絡ありがとうございます。\nご検討いただきありがとうございます。\nご都合のよいタイミングでご連絡いただけますと幸いです。\n引き続きどうぞよろしくお願いいたします。${sig}`;
+    }
+    if (tone === "casual") {
+      return `ご連絡ありがとうございます！\nご検討いただきありがとうございます。\nご都合のよいタイミングでご連絡ください！${sig}`;
+    }
+    return `検討してくれてありがとう！\n決まったら連絡してね！${sig}`;
+  }
+
+  // こちらから辞辺
+  if (replySubtype === "self_decline") {
+    if (tone === "formal") {
+      return `ご連絡ありがとうございます。\n誠に恐れ入りますが、今回は弊社の都合によりご一緒することが難しい状況でございます。\nまたの機会にご一緒できますことを楽しみにしております。\n今後ともどうぞよろしくお願いいたします。${sig}`;
+    }
+    if (tone === "casual") {
+      return `ご連絡ありがとうございます。\n大変申し訳ございませんが、今回は弊社の事情により参加が難しい状況です。\nまたの機会によろしくお願いします。${sig}`;
+    }
+    return `ごめん、今回は参加できそうにないんだ。\nまた誤ってね！${sig}`;
+  }
+
+  // 日程変更の依頼
+  if (replySubtype === "change_request") {
+    const slotsBlock = newScheduleText?.trim() ? `\n\n${newScheduleText.trim()}` : "";
+    if (tone === "formal") {
+      return `ご連絡ありがとうございます。\n大変恐れ入りますが、一度ご確認いただいた打ち合わせにつきまして、日程の変更をお願いできますでしょうか。${slotsBlock ? `\n\n以下の日程でご都合はいかがでしょうか。${slotsBlock}` : ""}\n\nお手数をおかけして大変申し訳ございません。\n${closing(tone)}${sig}`;
+    }
+    if (tone === "casual") {
+      return `ご連絡ありがとうございます。\n大変申し訳ございませんが、一度日程変更をお願いできますか？${slotsBlock ? `\n\n${slotsBlock}` : ""}\n\n${closing(tone)}${sig}`;
+    }
+    return `ごめん、日程変更したくて。${slotsBlock ? `\n\n${slotsBlock}` : ""}\n\n${closing(tone)}${sig}`;
+  }
+
+  // fallback
   if (tone === "formal") {
-    return `ご連絡ありがとうございます。\n${ack}\n次回日程につきまして、改めてご連絡させていただきます。\n引き続きよろしくお願いいたします。${sig}`;
+    return `ご連絡ありがとうございます。\n${ack}\n${closing(tone)}${sig}`;
   }
   if (tone === "casual") {
-    return `ご連絡ありがとうございます！\n${ackCasual}\nまたご連絡しますね。\n引き続きよろしくお願いします！${sig}`;
+    return `ご連絡ありがとうございます！\n${ackCasual}\n${closing(tone)}${sig}`;
   }
-  return `了解〜！\nまた連絡するね。${sig}`;
+  return `了解〜！${sig}`;
 }
 
 // ─────────────────────────────────────────────

@@ -68,6 +68,9 @@ const MAPPING = {
   "bell.fill": "notifications",
   "arrow.uturn.right": "reply",
   "square.and.pencil.circle.fill": "rate-review",
+  // 返信シーン分岐
+  "hand.raised.fill": "back-hand",
+  "arrow.triangle.2.circlepath": "sync",
 } as unknown as IconMapping;
 
 /**

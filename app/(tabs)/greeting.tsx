@@ -26,6 +26,7 @@ import {
   type ProfileCard,
   type MeetingInfo,
   type ReplyStyle,
+  type ReplySubtype,
 } from "@/lib/greeting-generator";
 
 // ─────────────────────────────────────────────
@@ -44,6 +45,15 @@ const TONES: { id: GreetingTone; label: string }[] = [
   { id: "formal",   label: "ビジネス丁寧語" },
   { id: "casual",   label: "カジュアル" },
   { id: "friendly", label: "タメ口" },
+];
+
+const REPLY_SUBTYPES: { id: ReplySubtype; label: string; icon: string; desc: string }[] = [
+  { id: "confirmed",      label: "日程が決まった",     icon: "checkmark.circle.fill",  desc: "相手が候補日を選んでくれた" },
+  { id: "reschedule",     label: "別候補を依頼",       icon: "calendar.badge.plus",    desc: "日程が合わず、改めて提案" },
+  { id: "declined",       label: "断られた",           icon: "xmark.circle.fill",      desc: "先方から論じられた" },
+  { id: "pending",        label: "保留・検討中",       icon: "clock.fill",             desc: "検討しますと言われた" },
+  { id: "self_decline",   label: "こちらから辞辺",     icon: "hand.raised.fill",       desc: "こちらが断る場合" },
+  { id: "change_request", label: "日程変更を依頼",     icon: "arrow.triangle.2.circlepath", desc: "一度決まった日程を変更したい" },
 ];
 
 // ─────────────────────────────────────────────
@@ -194,6 +204,10 @@ export default function GreetingScreen() {
   // 署名・返信スタイル
   const [includeSignature, setIncludeSignature] = useState(true);
   const [replyStyle, setReplyStyle] = useState<ReplyStyle>("kashikomarimashita");
+  // 返信シーン分岐
+  const [replySubtype, setReplySubtype] = useState<ReplySubtype>("confirmed");
+  const [confirmedDate, setConfirmedDate] = useState("");
+  const [newScheduleText, setNewScheduleText] = useState("");
 
   // 生成メッセージ
   const [generated, setGenerated] = useState<string | null>(null);
@@ -232,12 +246,15 @@ export default function GreetingScreen() {
       recipientName: recipientName.trim() || undefined,
       includeSignature,
       replyStyle,
+      replySubtype: scene === "reply" ? replySubtype : undefined,
+      confirmedDate: scene === "reply" && replySubtype === "confirmed" ? (confirmedDate.trim() || undefined) : undefined,
+      newScheduleText: scene === "reply" && (replySubtype === "reschedule" || replySubtype === "change_request") ? (newScheduleText.trim() || undefined) : undefined,
     });
     setGenerated(msg);
     setEditedMessage(null);
     setIsEditing(false);
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [selectedCard, scene, tone, recipientName, meetingPurpose, meetingDate, meetingTime, meetingUrl, nextAction, theirAction, scheduleText, includeSignature, replyStyle]);
+  }, [selectedCard, scene, tone, recipientName, meetingPurpose, meetingDate, meetingTime, meetingUrl, nextAction, theirAction, scheduleText, includeSignature, replyStyle, replySubtype, confirmedDate, newScheduleText]);
 
   const displayMessage = editedMessage ?? generated;
 
@@ -477,6 +494,73 @@ export default function GreetingScreen() {
                     style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border, minHeight: 60, textAlignVertical: "top" }]} />
                 </View>
               </>
+            )}
+          </View>
+        )}
+
+        {/* 返信シーン: 分岐選択UI */}
+        {scene === "reply" && (
+          <View style={[st.card, { backgroundColor: c.surface, borderColor: c.border, gap: 10 }]}>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: c.foreground, marginBottom: 4 }}>状況を選んでください</Text>
+            <View style={{ gap: 8 }}>
+              {REPLY_SUBTYPES.map(sub => {
+                const isSelected = replySubtype === sub.id;
+                return (
+                  <Pressable
+                    key={sub.id}
+                    style={({ pressed }) => [st.row, {
+                      gap: 12, padding: 12, borderRadius: 12, borderWidth: 2,
+                      borderColor: isSelected ? c.primary : c.border,
+                      backgroundColor: isSelected ? c.tealLight : c.background,
+                    }, pressed && { opacity: 0.7 }]}
+                    onPress={() => { setReplySubtype(sub.id); setGenerated(null); }}
+                  >
+                    <IconSymbol name={sub.icon as any} size={20} color={isSelected ? c.primary : c.muted} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: isSelected ? c.primary : c.foreground }}>{sub.label}</Text>
+                      <Text style={{ fontSize: 12, color: c.muted }}>{sub.desc}</Text>
+                    </View>
+                    {isSelected && <IconSymbol name="checkmark.circle.fill" size={18} color={c.primary} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* 日程確定時: 確定日時入力 */}
+            {replySubtype === "confirmed" && (
+              <View style={{ gap: 6, marginTop: 4 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: c.foreground }}>確定日時（任意）</Text>
+                <TextInput
+                  value={confirmedDate}
+                  onChangeText={setConfirmedDate}
+                  placeholder="例: 3月10日（月） 10:00～11:00"
+                  placeholderTextColor={c.muted}
+                  style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
+                />
+              </View>
+            )}
+
+            {/* 別候補依頼・日程変更時: 新候補日程入力 */}
+            {(replySubtype === "reschedule" || replySubtype === "change_request") && (
+              <View style={{ gap: 6, marginTop: 4 }}>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: c.foreground }}>候補日程（任意）</Text>
+                <Text style={{ fontSize: 12, color: c.muted }}>検索タブから転送、または直接入力</Text>
+                <TextInput
+                  value={newScheduleText}
+                  onChangeText={setNewScheduleText}
+                  placeholder={`例:\n● 3月10日（月） 10:00～11:00\n● 3月11日（火） 14:00～15:00`}
+                  placeholderTextColor={c.muted}
+                  multiline
+                  style={[st.input, {
+                    color: c.foreground,
+                    backgroundColor: c.background,
+                    borderColor: newScheduleText ? c.primary : c.border,
+                    minHeight: 80,
+                    textAlignVertical: "top",
+                    lineHeight: 22,
+                  }]}
+                />
+              </View>
             )}
           </View>
         )}
