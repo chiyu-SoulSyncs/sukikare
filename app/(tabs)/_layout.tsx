@@ -43,13 +43,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="presets"
-        options={{
-          title: "プリセット",
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="bookmark.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="greeting"
         options={{
           title: "挨拶文",

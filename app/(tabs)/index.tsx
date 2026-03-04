@@ -87,7 +87,7 @@ export default function HomeScreen() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [checkingGoogle, setCheckingGoogle] = useState(false);
 
-  const [settings, setSettings] = useState<SearchSettings>({
+  const DEFAULT_SETTINGS: SearchSettings = {
     timeMode: "business",
     businessStart: 9,
     businessEnd: 18,
@@ -97,7 +97,21 @@ export default function HomeScreen() {
     requiredDurationMinutes: 60,
     maxSlots: 5,
     startStepMinutes: 30,
-  });
+  };
+
+  const [settings, setSettings] = useState<SearchSettings>(DEFAULT_SETTINGS);
+
+  // 設定の自動引き継ぎ: 起動時にAsyncStorageから設定を復元
+  useEffect(() => {
+    AsyncStorage.getItem("last_search_settings").then((raw) => {
+      if (raw) {
+        try {
+          const saved = JSON.parse(raw) as Partial<SearchSettings>;
+          setSettings((prev) => ({ ...prev, ...saved }));
+        } catch {}
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -141,6 +155,62 @@ export default function HomeScreen() {
       setGoogleConnected(true);
     }
   }, [user, router]);
+
+  // 設定変更時にAsyncStorageに保存
+  const updateSettings = useCallback((patch: Partial<SearchSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      AsyncStorage.setItem("last_search_settings", JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  // クイック検索: 日付・時間帯を自動セットして即検索
+  const handleQuickSearch = useCallback(async (type: "this_week_am" | "this_week_pm" | "next_week_am" | "next_week_pm" | "this_week_all" | "next_week_all") => {
+    if (!user) { router.push("/login" as any); return; }
+    if (!googleConnected) { await handleConnectGoogle(); return; }
+
+    const now = new Date();
+    const offset = type.startsWith("next") ? 1 : 0;
+    const ws = startOfWeek(addDays(now, offset * 7));
+    const weekDatesForSearch: Date[] = [];
+    for (let i = 1; i <= 5; i++) { // 月山のみ
+      const d = addDays(ws, i);
+      if (d >= now) weekDatesForSearch.push(d);
+    }
+    if (weekDatesForSearch.length === 0) return;
+
+    const timeMode: SearchSettings["timeMode"] = type.includes("all") ? "business" : "custom";
+    const quickSettings: SearchSettings = {
+      ...settings,
+      timeMode,
+      customStart: type.includes("am") ? 9 : type.includes("pm") ? 13 : 9,
+      customEnd: type.includes("am") ? 12 : type.includes("pm") ? 18 : 18,
+      businessStart: 9,
+      businessEnd: 18,
+    };
+
+    setIsSearching(true);
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const calendarIds = await loadSelectedCalendars();
+      const timeMin = new Date(weekDatesForSearch[0]); timeMin.setHours(0, 0, 0, 0);
+      const timeMax = new Date(weekDatesForSearch[weekDatesForSearch.length - 1]); timeMax.setHours(23, 59, 59, 999);
+      const events = await fetchEvents(String(user.id), calendarIds, timeMin, timeMax);
+      const slots = extractFreeSlots(weekDatesForSearch, events, quickSettings);
+      await AsyncStorage.setItem("search_results", JSON.stringify({
+        slots: slots.map((s) => ({ start: s.start.toISOString(), end: s.end.toISOString(), durationMinutes: s.durationMinutes })),
+        settings: quickSettings,
+      }));
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push("/result" as any);
+    } catch (err) {
+      console.error("Quick search failed:", err);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [user, googleConnected, settings, router, handleConnectGoogle]);
 
   const handleSearch = useCallback(async () => {
     if (!user) { router.push("/login" as any); return; }
@@ -253,6 +323,39 @@ export default function HomeScreen() {
             <Text style={{ flex: 1, color: "#fff", fontWeight: "600", fontSize: 14 }}>Googleカレンダーを連携する</Text>
             <IconSymbol name="chevron.right" size={18} color="#fff" />
           </Pressable>
+        )}
+
+        {/* Quick Search Buttons */}
+        {isAuthenticated && googleConnected && (
+          <View style={{ marginHorizontal: 16, marginBottom: 14 }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: c.muted, marginBottom: 8 }}>クイック検索</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {([
+                { label: "今週午前", type: "this_week_am" as const },
+                { label: "今週午後", type: "this_week_pm" as const },
+                { label: "来週午前", type: "next_week_am" as const },
+                { label: "来週午後", type: "next_week_pm" as const },
+                { label: "今週一週間", type: "this_week_all" as const },
+                { label: "来週一週間", type: "next_week_all" as const },
+              ]).map(({ label, type }) => (
+                <Pressable
+                  key={type}
+                  style={({ pressed }) => [{
+                    backgroundColor: c.surface,
+                    borderWidth: 1,
+                    borderColor: c.border,
+                    borderRadius: 20,
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                  }, pressed && { opacity: 0.7, backgroundColor: c.primary + "22" }]}
+                  onPress={() => !isSearching && handleQuickSearch(type)}
+                  disabled={isSearching}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: c.foreground }}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         )}
 
         {/* Mode Selector */}
@@ -376,7 +479,7 @@ export default function HomeScreen() {
                 <Pressable
                   key={opt.value}
                   style={({ pressed }) => [{ flex: 1, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 12, backgroundColor: c.background, borderWidth: 1, borderColor: c.border, alignItems: "center" }, settings.timeMode === opt.value && { backgroundColor: c.primary, borderColor: c.primary }, pressed && { opacity: 0.8 }]}
-                  onPress={() => setSettings((s) => ({ ...s, timeMode: opt.value }))}
+                  onPress={() => updateSettings({ timeMode: opt.value })}
                 >
                   <Text style={{ fontSize: 12, color: settings.timeMode === opt.value ? "#fff" : c.muted, fontWeight: "600", textAlign: "center" }}>{opt.label}</Text>
                 </Pressable>
@@ -389,7 +492,7 @@ export default function HomeScreen() {
                 <Pressable
                   key={opt.value}
                   style={({ pressed }) => [{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: c.background, borderWidth: 1, borderColor: c.border }, settings.requiredDurationMinutes === opt.value && { backgroundColor: c.primary, borderColor: c.primary }, pressed && { opacity: 0.8 }]}
-                  onPress={() => setSettings((s) => ({ ...s, requiredDurationMinutes: opt.value, minDurationMinutes: opt.value }))}
+                  onPress={() => updateSettings({ requiredDurationMinutes: opt.value, minDurationMinutes: opt.value })}
                 >
                   <Text style={{ fontSize: 13, color: settings.requiredDurationMinutes === opt.value ? "#fff" : c.muted, fontWeight: settings.requiredDurationMinutes === opt.value ? "700" : "500" }}>{opt.label}</Text>
                 </Pressable>
@@ -402,7 +505,7 @@ export default function HomeScreen() {
                 <Pressable
                   key={opt.value}
                   style={({ pressed }) => [{ flex: 1, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: c.background, borderWidth: 1.5, borderColor: c.border, alignItems: "center" }, settings.startStepMinutes === opt.value && { backgroundColor: c.primary, borderColor: c.primary }, pressed && { opacity: 0.8 }]}
-                  onPress={() => setSettings((s) => ({ ...s, startStepMinutes: opt.value }))}
+                  onPress={() => updateSettings({ startStepMinutes: opt.value })}
                 >
                   <Text style={{ fontSize: 13, fontWeight: "700", color: settings.startStepMinutes === opt.value ? "#fff" : c.foreground }}>{opt.label}</Text>
                   <Text style={{ fontSize: 11, color: settings.startStepMinutes === opt.value ? "rgba(255,255,255,0.8)" : c.muted, marginTop: 2 }}>{opt.sublabel}</Text>
@@ -416,7 +519,7 @@ export default function HomeScreen() {
                 <Pressable
                   key={opt.value}
                   style={({ pressed }) => [{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: c.background, borderWidth: 1, borderColor: c.border }, settings.maxSlots === opt.value && { backgroundColor: c.primary, borderColor: c.primary }, pressed && { opacity: 0.8 }]}
-                  onPress={() => setSettings((s) => ({ ...s, maxSlots: opt.value }))}
+                  onPress={() => updateSettings({ maxSlots: opt.value })}
                 >
                   <Text style={{ fontSize: 13, color: settings.maxSlots === opt.value ? "#fff" : c.muted, fontWeight: settings.maxSlots === opt.value ? "700" : "500" }}>{opt.label}</Text>
                 </Pressable>
