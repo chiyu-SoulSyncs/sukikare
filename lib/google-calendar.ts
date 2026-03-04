@@ -1,6 +1,5 @@
 import { getApiBaseUrl } from "@/constants/oauth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 
@@ -69,7 +68,13 @@ export async function startGoogleAuth(userId: string): Promise<boolean> {
 
   // Native: expo-web-browserを使用してシステムブラウザで認証
   // コールバック後にアプリのディープリンクにリダイレクトされる
-  const appRedirectUri = Linking.createURL("/google-callback");
+  //
+  // 重要: Expo Goでは Linking.createURL が exp:// スキームを生成するが、
+  // ManusのOAuthシステムは exp:// を許可していない。
+  // 代わりにアプリのカスタムスキーム (manus*) を直接指定する。
+  // スキームは app.config.ts の scheme 値と一致させる必要がある。
+  const APP_SCHEME = "manus20260304040150";
+  const appRedirectUri = `${APP_SCHEME}://google-callback`;
   console.log("[Google Auth] App redirect URI:", appRedirectUri);
 
   const startUrl = `${base}/api/oauth/google/start?userId=${encodeURIComponent(userId)}&appRedirect=${encodeURIComponent(appRedirectUri)}`;
@@ -81,11 +86,10 @@ export async function startGoogleAuth(userId: string): Promise<boolean> {
     if (result.type === "success") {
       // ディープリンクのURLからパラメータを解析
       const url = result.url;
-      const parsed = Linking.parse(url);
-      const params = parsed.queryParams ?? {};
-      console.log("[Google Auth] Callback params:", params);
-
-      if (params.googleConnected === "true") {
+      console.log("[Google Auth] Callback URL:", url);
+      // カスタムスキームのURLは標準URLパーサーで解析できない場合があるので正規表現でパラメータを取得
+      const match = url.match(/[?&]googleConnected=([^&]+)/);
+      if (match && match[1] === "true") {
         return true;
       }
     }
