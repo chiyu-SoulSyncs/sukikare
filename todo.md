@@ -64,3 +64,4 @@
 - [x] OAuth認証後にUIが更新されない問題を修正（AuthProviderとAppStateリスナーを追加）
 - [x] ログイン後にrefreshAuth()を呼んで全コンポーネントの認証状態を即時更新
 - [x] Google連携後にsetGoogleConnected(true)を呼んでホーム画面のUIを即時更新
+- [x] 検索設定に「開始時刻の刻み」オプション追加（正時のみ / 30分刻み）

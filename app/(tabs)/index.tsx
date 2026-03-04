@@ -96,6 +96,7 @@ export default function HomeScreen() {
     minDurationMinutes: 60,
     requiredDurationMinutes: 60,
     maxSlots: 5,
+    startStepMinutes: 30,
   });
 
   useEffect(() => {
@@ -391,6 +392,20 @@ export default function HomeScreen() {
                   onPress={() => setSettings((s) => ({ ...s, requiredDurationMinutes: opt.value, minDurationMinutes: opt.value }))}
                 >
                   <Text style={{ fontSize: 13, color: settings.requiredDurationMinutes === opt.value ? "#fff" : c.muted, fontWeight: settings.requiredDurationMinutes === opt.value ? "700" : "500" }}>{opt.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={{ fontSize: 13, fontWeight: "600", color: c.muted, marginTop: 16, marginBottom: 8 }}>開始時刻の刻み</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {([{ label: "正時のみ", sublabel: "10:00, 11:00...", value: 60 }, { label: "30分刻み", sublabel: "10:00, 10:30...", value: 30 }] as const).map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  style={({ pressed }) => [{ flex: 1, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: c.background, borderWidth: 1.5, borderColor: c.border, alignItems: "center" }, settings.startStepMinutes === opt.value && { backgroundColor: c.primary, borderColor: c.primary }, pressed && { opacity: 0.8 }]}
+                  onPress={() => setSettings((s) => ({ ...s, startStepMinutes: opt.value }))}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: settings.startStepMinutes === opt.value ? "#fff" : c.foreground }}>{opt.label}</Text>
+                  <Text style={{ fontSize: 11, color: settings.startStepMinutes === opt.value ? "rgba(255,255,255,0.8)" : c.muted, marginTop: 2 }}>{opt.sublabel}</Text>
                 </Pressable>
               ))}
             </View>

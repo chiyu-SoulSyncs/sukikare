@@ -157,6 +157,7 @@ export interface SearchSettings {
   minDurationMinutes: number;
   requiredDurationMinutes: number;
   maxSlots: number; // 0 = unlimited
+  startStepMinutes: 30 | 60; // 30 = 30分刻み（10:00, 10:30, 11:00...）, 60 = 正時のみ（10:00, 11:00...）
 }
 
 export function extractFreeSlots(
@@ -248,7 +249,7 @@ function extractFreeSlotsForDay(
               durationMinutes: settings.requiredDurationMinutes,
             });
           }
-          slotStart = new Date(slotStart.getTime() + 30 * 60000); // 30分刻みで候補を出す
+          slotStart = new Date(slotStart.getTime() + settings.startStepMinutes * 60000);
         }
       }
     }
@@ -269,7 +270,7 @@ function extractFreeSlotsForDay(
             durationMinutes: settings.requiredDurationMinutes,
           });
         }
-        slotStart = new Date(slotStart.getTime() + 30 * 60000);
+        slotStart = new Date(slotStart.getTime() + settings.startStepMinutes * 60000);
       }
     }
   }

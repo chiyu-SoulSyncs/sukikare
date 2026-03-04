@@ -53,6 +53,7 @@ export function createDefaultPreset(name: string): Preset {
       minDurationMinutes: 60,
       requiredDurationMinutes: 60,
       maxSlots: 5,
+      startStepMinutes: 30,
     },
     toneLevel: "formal",
     messageFormat: "bullet",

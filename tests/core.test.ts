@@ -16,6 +16,7 @@ const BASE_SETTINGS: SearchSettings = {
   minDurationMinutes: 60,
   requiredDurationMinutes: 60,
   maxSlots: 0,
+  startStepMinutes: 30,
 };
 
 describe("extractFreeSlots", () => {
