@@ -7,12 +7,14 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { startOAuthLogin } from "@/constants/oauth";
 import * as Auth from "@/lib/_core/auth";
+import { useAuthContext } from "@/lib/auth-context";
 
 export default function LoginScreen() {
   const colors = useColors();
   const router = useRouter();
   const c = colors;
   const [isLoading, setIsLoading] = useState(false);
+  const { refresh: refreshAuth } = useAuthContext();
 
   const handleLogin = async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -40,7 +42,9 @@ export default function LoginScreen() {
             console.warn("[Login] Failed to parse user info:", e);
           }
         }
-        // Navigate to tabs to trigger re-mount and re-read session token
+        // Refresh auth state in context so all screens update immediately
+        await refreshAuth();
+        // Navigate to tabs
         router.replace("/(tabs)");
       }
     } catch (error) {

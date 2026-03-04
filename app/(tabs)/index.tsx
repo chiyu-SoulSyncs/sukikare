@@ -13,7 +13,7 @@ import * as Haptics from "expo-haptics";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuthContext } from "@/lib/auth-context";
 import {
   checkGoogleConnection,
   startGoogleAuth,
@@ -76,7 +76,7 @@ const TIME_MODE_OPTIONS: { label: string; value: SearchSettings["timeMode"] }[] 
 export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuthContext();
 
   const [searchMode, setSearchMode] = useState<"date" | "week">("date");
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
@@ -135,7 +135,10 @@ export default function HomeScreen() {
 
   const handleConnectGoogle = useCallback(async () => {
     if (!user) { router.push("/login" as any); return; }
-    await startGoogleAuth(String(user.id));
+    const success = await startGoogleAuth(String(user.id));
+    if (success) {
+      setGoogleConnected(true);
+    }
   }, [user, router]);
 
   const handleSearch = useCallback(async () => {

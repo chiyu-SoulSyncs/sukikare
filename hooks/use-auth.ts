@@ -1,7 +1,7 @@
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Platform } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, AppStateStatus, Platform } from "react-native";
 
 type UseAuthOptions = {
   autoFetch?: boolean;
@@ -12,6 +12,7 @@ export function useAuth(options?: UseAuthOptions) {
   const [user, setUser] = useState<Auth.User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const appState = useRef(AppState.currentState);
 
   const fetchUser = useCallback(async () => {
     console.log("[useAuth] fetchUser called");
@@ -121,6 +122,26 @@ export function useAuth(options?: UseAuthOptions) {
       console.log("[useAuth] autoFetch disabled, setting loading to false");
       setLoading(false);
     }
+  }, [autoFetch, fetchUser]);
+
+  // AppStateリスナー: アプリがフォアグラウンドに戻った際に認証状態を再確認
+  // これにより、OAuth認証後にアプリに戻った際にUIが更新される
+  useEffect(() => {
+    if (!autoFetch) return;
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === "active"
+      ) {
+        console.log("[useAuth] App came to foreground, re-checking auth state...");
+        fetchUser();
+      }
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener("change", handleAppStateChange);
+    return () => subscription.remove();
   }, [autoFetch, fetchUser]);
 
   useEffect(() => {

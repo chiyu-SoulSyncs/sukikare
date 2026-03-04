@@ -61,3 +61,6 @@
 - [x] タブバーが下部で見切れている問題を修正
 - [x] 設定画面がスクロールできず固まっている問題を修正
 - [x] Expo Go実機でのGoogleログインエラー修正（expo-web-browserのopenAuthSessionAsyncを使用してサーバーコールバック後にディープリンクで戻る方式に変更）
+- [x] OAuth認証後にUIが更新されない問題を修正（AuthProviderとAppStateリスナーを追加）
+- [x] ログイン後にrefreshAuth()を呼んで全コンポーネントの認証状態を即時更新
+- [x] Google連携後にsetGoogleConnected(true)を呼んでホーム画面のUIを即時更新
