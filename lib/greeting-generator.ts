@@ -273,11 +273,11 @@ function buildReply(opts: GenerateGreetingOptions): string {
   // 日程確定
   if (replySubtype === "confirmed") {
     if (tone === "formal") {
-      const dateBlock = confirmedDate?.trim() ? `\n\n${confirmedDate.trim()}にてお待ちしております。` : "";
+      const dateBlock = confirmedDate?.trim() ? `\n\n${confirmedDate.trim()}にお話しできることを楽しみにしております。` : "";
       return `ご連絡ありがとうございます。\n${ack}${dateBlock}\n引き続きどうぞよろしくお願いいたします。${sig}`;
     }
     if (tone === "casual") {
-      const dateBlock = confirmedDate?.trim() ? `\n${confirmedDate.trim()}でお待ちしています！` : "";
+      const dateBlock = confirmedDate?.trim() ? `\n${confirmedDate.trim()}を楽しみにしています！` : "";
       return `ご連絡ありがとうございます！\n${ackCasual}${dateBlock}\n引き続きよろしくお願いします！${sig}`;
     }
     const dateBlock = confirmedDate?.trim() ? `\n${confirmedDate.trim()}ね！` : "";
