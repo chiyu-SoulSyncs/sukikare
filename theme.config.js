@@ -1,14 +1,25 @@
 /** @type {const} */
 const themeColors = {
-  primary: { light: '#0a7ea4', dark: '#0a7ea4' },
-  background: { light: '#ffffff', dark: '#151718' },
-  surface: { light: '#f5f5f5', dark: '#1e2022' },
-  foreground: { light: '#11181C', dark: '#ECEDEE' },
-  muted: { light: '#687076', dark: '#9BA1A6' },
-  border: { light: '#E5E7EB', dark: '#334155' },
-  success: { light: '#22C55E', dark: '#4ADE80' },
-  warning: { light: '#F59E0B', dark: '#FBBF24' },
-  error: { light: '#EF4444', dark: '#F87171' },
+  // ティール系メインカラー（ムードボード参照）
+  primary: { light: '#00BFA5', dark: '#00BFA5' },
+  // アクセント：イエロー
+  accent: { light: '#FFD54F', dark: '#FFD54F' },
+  // 背景
+  background: { light: '#F4FAFA', dark: '#0F1F1F' },
+  surface: { light: '#FFFFFF', dark: '#1A2E2E' },
+  // テキスト
+  foreground: { light: '#1A2E2E', dark: '#F0FAFA' },
+  muted: { light: '#6B8E8E', dark: '#8ABABA' },
+  // ボーダー
+  border: { light: '#D0ECEC', dark: '#2A4444' },
+  // ステータス
+  success: { light: '#26C6A2', dark: '#26C6A2' },
+  warning: { light: '#FFD54F', dark: '#FFD54F' },
+  error: { light: '#EF5350', dark: '#EF9A9A' },
+  // ティール薄め（カード背景など）
+  tealLight: { light: '#E0F5F3', dark: '#1A3838' },
+  // セカンダリティール（深め）
+  tealDark: { light: '#00897B', dark: '#00BFA5' },
 };
 
 module.exports = { themeColors };

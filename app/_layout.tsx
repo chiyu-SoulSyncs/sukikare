@@ -88,6 +88,8 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="oauth/callback" />
+            <Stack.Screen name="result" options={{ presentation: "card" }} />
+            <Stack.Screen name="login" options={{ presentation: "fullScreenModal" }} />
           </Stack>
           <StatusBar style="auto" />
         </QueryClientProvider>
