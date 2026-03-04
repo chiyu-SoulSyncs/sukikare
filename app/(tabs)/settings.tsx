@@ -120,7 +120,14 @@ export default function SettingsScreen() {
 
   return (
     <ScreenContainer containerClassName="bg-background">
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        bounces={true}
+        alwaysBounceVertical={true}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 60 }}
+      >
 
         {/* Header */}
         <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}>

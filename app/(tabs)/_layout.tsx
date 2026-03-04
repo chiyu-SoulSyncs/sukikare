@@ -9,8 +9,9 @@ import { useColors } from "@/hooks/use-colors";
 export default function TabLayout() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 8);
-  const tabBarHeight = 56 + bottomPadding;
+  // タブバー高さ：iOSのホームインジケーター（34px）を確実に考慮
+  const bottomPadding = Platform.OS === "web" ? 12 : Math.max(insets.bottom, 16);
+  const tabBarHeight = 60 + bottomPadding;
 
   return (
     <Tabs
