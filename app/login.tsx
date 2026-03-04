@@ -1,20 +1,53 @@
-import React from "react";
-import { View, Text, Pressable, StyleSheet, Platform } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Pressable, StyleSheet, Platform, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
 import { startOAuthLogin } from "@/constants/oauth";
+import * as Auth from "@/lib/_core/auth";
 
 export default function LoginScreen() {
   const colors = useColors();
   const router = useRouter();
   const c = colors;
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await startOAuthLogin();
+    setIsLoading(true);
+    try {
+      const result = await startOAuthLogin();
+      if (result?.sessionToken) {
+        // Save session token to SecureStore
+        await Auth.setSessionToken(result.sessionToken);
+        // Save user info if available
+        if (result.userBase64) {
+          try {
+            const userJson = atob(result.userBase64);
+            const userObj = JSON.parse(userJson);
+            const userInfo: Auth.User = {
+              id: userObj.id,
+              openId: userObj.openId,
+              name: userObj.name ?? null,
+              email: userObj.email ?? null,
+              loginMethod: userObj.loginMethod ?? null,
+              lastSignedIn: new Date(userObj.lastSignedIn ?? Date.now()),
+            };
+            await Auth.setUserInfo(userInfo);
+          } catch (e) {
+            console.warn("[Login] Failed to parse user info:", e);
+          }
+        }
+        // Navigate to tabs to trigger re-mount and re-read session token
+        router.replace("/(tabs)");
+      }
+    } catch (error) {
+      console.error("[Login] handleLogin error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -70,8 +103,14 @@ export default function LoginScreen() {
             ]}
             onPress={handleLogin}
           >
-            <IconSymbol name="person.circle.fill" size={24} color="#fff" />
-            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 17 }}>Googleでログイン</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <IconSymbol name="person.circle.fill" size={24} color="#fff" />
+            )}
+            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 17 }}>
+              {isLoading ? "ログイン中..." : "Googleでログイン"}
+            </Text>
           </Pressable>
           <Text style={{ fontSize: 12, color: c.muted, textAlign: "center", lineHeight: 18 }}>
             ログインすることで、利用規約とプライバシーポリシーに同意したものとみなします

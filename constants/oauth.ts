@@ -110,14 +110,17 @@ export const getLoginUrl = () => {
  * Start OAuth login flow.
  *
  * On native platforms (iOS/Android), use expo-web-browser openAuthSessionAsync
- * to open the system browser. The server OAuth callback redirects to the app
- * via manus* deep link scheme.
+ * to open the system browser. The server OAuth callback redirects to the manus*
+ * deep link scheme. openAuthSessionAsync intercepts this URL and returns it as result.url.
  *
  * On web, this simply redirects to the login URL.
  *
- * @returns Always null, the callback is handled via deep link.
+ * @returns The session token if authentication succeeded, null otherwise.
  */
-export async function startOAuthLogin(): Promise<string | null> {
+export async function startOAuthLogin(): Promise<{
+  sessionToken: string;
+  userBase64: string | null;
+} | null> {
   const loginUrl = getLoginUrl();
   const appRedirectUri = getAppRedirectUri();
 
@@ -130,22 +133,36 @@ export async function startOAuthLogin(): Promise<string | null> {
   }
 
   // Native: expo-web-browserを使用してシステムブラウザで認証
-  // サーバーがOAuth処理後、manus*ディープリンクでアプリに自動返る
+  // サーバーがOAuth処理後、manus*ディープリンクにリダイレクト
+  // openAuthSessionAsyncはそのURLを検知してブラウザを閉じ、result.urlに返す
   try {
     console.log("[OAuth] Opening login URL:", loginUrl);
     console.log("[OAuth] App redirect URI:", appRedirectUri);
-    // openAuthSessionAsync の第2引数にアプリスキームを渡すことで
-    // ブラウザがそのスキームのURLに遷移したときに自動でアプリに戻る
     const result = await WebBrowser.openAuthSessionAsync(
       loginUrl,
       appRedirectUri ?? `${env.deepLinkScheme}://`,
     );
-    console.log("[OAuth] WebBrowser result:", result.type);
-    // 認証後のディープリンクは app/oauth/callback.tsx で処理される
+    console.log("[OAuth] WebBrowser result type:", result.type);
+
+    if (result.type === "success" && result.url) {
+      console.log("[OAuth] Result URL:", result.url);
+      // Parse sessionToken and user from the deep link URL
+      // URL format: manus20260304040150://oauth/callback?sessionToken=...&user=...
+      try {
+        const url = new URL(result.url);
+        const sessionToken = url.searchParams.get("sessionToken");
+        const userBase64 = url.searchParams.get("user");
+        if (sessionToken) {
+          console.log("[OAuth] Session token extracted from result URL");
+          return { sessionToken, userBase64 };
+        }
+      } catch (parseError) {
+        console.error("[OAuth] Failed to parse result URL:", parseError);
+      }
+    }
   } catch (error) {
     console.error("[OAuth] Failed to open login URL:", error);
   }
 
-  // The OAuth callback will reopen the app via deep link.
   return null;
 }
