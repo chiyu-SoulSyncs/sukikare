@@ -85,7 +85,8 @@ export function registerGoogleCalendarRoutes(app: Express) {
     url.searchParams.set("prompt", "consent");
     url.searchParams.set("state", state);
 
-    res.json({ url: url.toString() });
+    // Redirect directly to Google OAuth page (works for both browser and openAuthSessionAsync)
+    res.redirect(302, url.toString());
   });
 
   // Google OAuth callback

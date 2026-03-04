@@ -58,11 +58,8 @@ export async function startGoogleAuth(userId: string): Promise<boolean> {
 
   if (Platform.OS === "web") {
     // Web: サーバーサイドOAuthフロー（リダイレクト）
-    const res = await fetch(`${base}/api/oauth/google/start?userId=${encodeURIComponent(userId)}`);
-    const data = await res.json();
-    if (data.url) {
-      window.location.href = data.url;
-    }
+    // サーバーが直接リダイレクトするので、window.location.hrefで遷移
+    window.location.href = `${base}/api/oauth/google/start?userId=${encodeURIComponent(userId)}`;
     return false; // リダイレクトするので戻り値は意味なし
   }
 
