@@ -93,16 +93,21 @@ function buildLine(slots: FreeSlot[], tone: ToneLevel, duration: number): string
 /**
  * メール向け: 「●」付きで日付を丁寧に列挙
  * 例: ● 3月10日（月） 10:00〜11:00
+ * ※ 署名はgenerateMessage側で締め文の後に付与する
  */
-function buildMail(slots: FreeSlot[], tone: ToneLevel, duration: number, sig?: Signature): string {
+function buildMail(slots: FreeSlot[], tone: ToneLevel, duration: number): string {
   const lines = slots.map((s) => `● ${formatDateLong(s.start)} ${formatTime(s.start)}〜${formatTime(s.end)}`);
-  const body = `${lines.join("\n")}\n${DURATION_LABELS[tone](duration)}`;
-  if (!sig || (!sig.company && !sig.department && !sig.name)) return body;
+  return `${lines.join("\n")}\n${DURATION_LABELS[tone](duration)}`;
+}
+
+/** 署名ブロックを生成する */
+function buildSignature(sig?: Signature): string {
+  if (!sig || (!sig.company && !sig.department && !sig.name)) return "";
   const sigLines: string[] = [];
   if (sig.company) sigLines.push(sig.company);
   if (sig.department) sigLines.push(sig.department);
   if (sig.name) sigLines.push(sig.name);
-  return `${body}\n\n--\n${sigLines.join("\n")}`;
+  return `────────\n${sigLines.join("\n")}`;
 }
 
 /**
@@ -134,7 +139,7 @@ export function generateMessage(options: MessageOptions): string {
     body = buildLine(slots, toneLevel, requiredDurationMinutes);
   } else {
     // "mail"
-    body = buildMail(slots, toneLevel, requiredDurationMinutes, signature);
+    body = buildMail(slots, toneLevel, requiredDurationMinutes);
   }
 
   const parts: string[] = [];
@@ -146,7 +151,13 @@ export function generateMessage(options: MessageOptions): string {
 
   parts.push(greeting);
   parts.push(body);
-  parts.push(closing);
+  if (closing) parts.push(closing);
+
+  // 署名は必ず最後（締め文の後）
+  if (format === "mail") {
+    const sig = buildSignature(signature);
+    if (sig) parts.push(sig);
+  }
 
   return parts.filter(Boolean).join("\n\n");
 }
