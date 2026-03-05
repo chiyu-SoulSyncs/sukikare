@@ -29,6 +29,7 @@ import {
   type MessageTemplate,
 } from "@/lib/exclusion-settings";
 import { useAuthContext } from "@/lib/auth-context";
+import { getApiBaseUrl } from "@/constants/oauth";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -146,7 +147,7 @@ export default function ResultScreen() {
     }
     setRegisteringSlot(idx);
     try {
-      const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:3000";
+      const API_BASE = getApiBaseUrl();
       const res = await fetch(`${API_BASE}/api/google/events/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -180,7 +181,7 @@ export default function ResultScreen() {
     if (!eventId || !user) return;
     const doDelete = async () => {
       try {
-        const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:3000";
+        const API_BASE = getApiBaseUrl();
         const res = await fetch(
           `${API_BASE}/api/google/events/${encodeURIComponent(eventId)}?userId=${encodeURIComponent(user.id)}`,
           { method: "DELETE" }
