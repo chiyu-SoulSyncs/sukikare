@@ -76,7 +76,7 @@ export default function LoginScreen() {
             <IconSymbol name="calendar.badge.clock" size={52} color={c.primary} />
           </View>
           <Text style={{ fontSize: 28, fontWeight: "800", color: c.foreground, textAlign: "center" }}>
-            Calmate
+            スキカレ
           </Text>
           <Text style={{ fontSize: 16, color: c.muted, textAlign: "center", lineHeight: 24 }}>
             Googleカレンダーと連携して{"\n"}空き時間を簡単に見つけよう

@@ -461,7 +461,7 @@ export default function SettingsScreen() {
         <View style={[st.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           {[
             { label: "バージョン", value: "1.0.0" },
-            { label: "開発", value: "Calmate" },
+            { label: "開発", value: "スキカレ" },
           ].map((item, i) => (
             <View key={i} style={[st.row, { justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: i === 0 ? 1 : 0, borderBottomColor: c.border }]}>
               <Text style={{ fontSize: 14, color: c.foreground }}>{item.label}</Text>

@@ -301,7 +301,7 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={[st.row, { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }]}>
           <Text style={{ fontSize: 18, fontWeight: "700", color: c.foreground, flex: 1 }}>
-            Calmate
+            スキカレ
           </Text>
           {!isAuthenticated ? (
             <Pressable

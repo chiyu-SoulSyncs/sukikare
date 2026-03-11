@@ -3,7 +3,7 @@ import "./scripts/load-env.js";
 import type { ExpoConfig } from "expo/config";
 
 const env = {
-  appName: "Calmate",
+  appName: "スキカレ",
   appSlug: "calmate",
   scheme: "calmate",
   iosBundleId: "com.chiyusoulsyncs.calmate",
