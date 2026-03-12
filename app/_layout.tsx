@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useMemo, useState } from "react";
+import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import "@/lib/_core/nativewind-pressable";
@@ -56,16 +57,13 @@ export default function RootLayout() {
     };
   }, [initialInsets, initialFrame]);
 
-  return (
+  const content = (
     <ThemeProvider>
       <SafeAreaProvider initialMetrics={providerInitialMetrics}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <AuthProvider>
           <trpc.Provider client={trpcClient} queryClient={queryClient}>
             <QueryClientProvider client={queryClient}>
-              {/* Default to hiding native headers so raw route segments don't appear (e.g. "(tabs)", "products/[id]"). */}
-              {/* If a screen needs the native header, explicitly enable it and set a human title via Stack.Screen options. */}
-              {/* in order for ios apps tab switching to work properly, use presentation: "fullScreenModal" for login page, whenever you decide to use presentation: "modal*/}
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="oauth/callback" />
@@ -80,4 +78,16 @@ export default function RootLayout() {
       </SafeAreaProvider>
     </ThemeProvider>
   );
+
+  if (Platform.OS === "web") {
+    return (
+      <View style={{ flex: 1, alignItems: "center", backgroundColor: "#f0f0f0" }}>
+        <View style={{ width: 390, maxWidth: "100%", height: "100%", backgroundColor: "#fff" }}>
+          {content}
+        </View>
+      </View>
+    );
+  }
+
+  return content;
 }

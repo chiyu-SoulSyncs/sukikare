@@ -42,7 +42,8 @@ export interface MeetingInfo {
   purpose?: string;
   date?: string;   // 例: "9月12日 (金曜日)"
   time?: string;   // 例: "午後7:00〜8:00"
-  url?: string;
+  location?: string; // 場所
+  url?: string;      // 会議URL
   nextAction?: string;  // 弊社対応事項
   theirAction?: string; // 貴社対応事項
 }
@@ -62,8 +63,10 @@ export interface GenerateGreetingOptions {
   scheduleText?: string;
   /** 次回案内シーン用: MTGタイトル（例: 「〇〇についての打ち合わせ」） */
   mtgTitle?: string;
-  /** 次回案内・リマインドシーン用: 開催場所またはURL */
+  /** 次回案内・リマインドシーン用: 開催場所 */
   location?: string;
+  /** 次回案内・リマインドシーン用: 会議URL */
+  meetingUrl?: string;
   /** リマインドシーン用: MTGタイトル */
   reminderTitle?: string;
   recipientName?: string;
@@ -153,13 +156,15 @@ function locationLabel(value: string): string {
   return `${label}：${value.trim()}`;
 }
 
-function meetingBlock(meeting: MeetingInfo, extraLocation?: string, extraTitle?: string): string {
+function meetingBlock(meeting: MeetingInfo, extraLocation?: string, extraTitle?: string, extraUrl?: string): string {
   const lines: string[] = [];
   if (extraTitle?.trim()) lines.push(`■件名：${extraTitle.trim()}`);
   if (meeting.purpose) lines.push(`■目的：${meeting.purpose}`);
   if (meeting.date && meeting.time) lines.push(`■日時：${meeting.date}⋅${meeting.time}`);
-  const urlSource = extraLocation?.trim() || meeting.url;
-  if (urlSource) lines.push(locationLabel(urlSource));
+  const loc = extraLocation?.trim() || meeting.location;
+  if (loc) lines.push(`■場所：${loc.trim()}`);
+  const url = extraUrl?.trim() || meeting.url;
+  if (url) lines.push(`■URL：${url.trim()}`);
   return lines.join("\n");
 }
 
@@ -182,7 +187,7 @@ function buildIntro(opts: GenerateGreetingOptions): string {
     const to = recipientName ? `${recipientName}の皆さん\n\n` : "";
     return `${to}はじめまして！\n${company ? `${company}、` : ""}${roleStr}${name}です。\n\nよろしくお願いします！${sig}`;
   }
-  return `はじめまして〜！\n${roleStr}${name}です。\nよろしくね！${sig}`;
+  return `はじめまして！${name}です。\nよろしくお願いします！${sig}`;
 }
 
 function buildThanks(opts: GenerateGreetingOptions): string {
@@ -225,7 +230,7 @@ function buildThanks(opts: GenerateGreetingOptions): string {
 }
 
 function buildReminder(opts: GenerateGreetingOptions): string {
-  const { profile, tone, meeting, location, reminderTitle, includeSignature = true } = opts;
+  const { profile, tone, meeting, location, meetingUrl, reminderTitle, includeSignature = true } = opts;
   const company = profile.company ?? "";
   const name = profile.name;
   const greet = openingGreeting(tone, company, name);
@@ -234,12 +239,13 @@ function buildReminder(opts: GenerateGreetingOptions): string {
   if (tone === "formal") {
     let body = `${greet}\n\n次回のお打ち合わせについて、下記の通りご連絡申し上げます。`;
     if (meeting) {
-      const block = meetingBlock(meeting, location, reminderTitle);
+      const block = meetingBlock(meeting, location, reminderTitle, meetingUrl);
       if (block) body += `\n\n${block}`;
-    } else if (location || reminderTitle) {
+    } else if (location || meetingUrl || reminderTitle) {
       const lines: string[] = [];
       if (reminderTitle?.trim()) lines.push(`■件名：${reminderTitle.trim()}`);
-      if (location?.trim()) lines.push(locationLabel(location));
+      if (location?.trim()) lines.push(`■場所：${location.trim()}`);
+      if (meetingUrl?.trim()) lines.push(`■URL：${meetingUrl.trim()}`);
       body += `\n\n${lines.join("\n")}`;
     }
     body += `\n\nご不明点やご質問等ございましたら、お気軽にお申し付けくださいませ。\n${closing(tone)}${sig}`;
@@ -248,12 +254,13 @@ function buildReminder(opts: GenerateGreetingOptions): string {
   if (tone === "casual") {
     let body = `${greet}\n\n次回のお打ち合わせについてご連絡です！`;
     if (meeting) {
-      const block = meetingBlock(meeting, location, reminderTitle);
+      const block = meetingBlock(meeting, location, reminderTitle, meetingUrl);
       if (block) body += `\n\n${block}`;
-    } else if (location || reminderTitle) {
+    } else if (location || meetingUrl || reminderTitle) {
       const lines: string[] = [];
       if (reminderTitle?.trim()) lines.push(`■件名：${reminderTitle.trim()}`);
-      if (location?.trim()) lines.push(locationLabel(location));
+      if (location?.trim()) lines.push(`■場所：${location.trim()}`);
+      if (meetingUrl?.trim()) lines.push(`■URL：${meetingUrl.trim()}`);
       body += `\n\n${lines.join("\n")}`;
     }
     body += `\n\n${closing(tone)}${sig}`;
@@ -262,17 +269,19 @@ function buildReminder(opts: GenerateGreetingOptions): string {
   let body = `次回の打ち合わせの件！`;
   if (meeting) {
     if (meeting.date && meeting.time) body += `\n● ${meeting.date}⋅${meeting.time}`;
-    const urlSource = location?.trim() || meeting.url;
-    if (urlSource) body += `\n🔗 ${urlSource}`;
-  } else if (location?.trim()) {
-    body += `\n🔗 ${location.trim()}`;
+    if (location?.trim()) body += `\n📍 ${location.trim()}`;
+    const url = meetingUrl?.trim() || meeting.url;
+    if (url) body += `\n🔗 ${url}`;
+  } else {
+    if (location?.trim()) body += `\n📍 ${location.trim()}`;
+    if (meetingUrl?.trim()) body += `\n🔗 ${meetingUrl.trim()}`;
   }
   body += `\n\n${closing(tone)}${sig}`;
   return body;
 }
 
 function buildNext(opts: GenerateGreetingOptions): string {
-  const { profile, tone, scheduleText, mtgTitle, location, includeSignature = true } = opts;
+  const { profile, tone, scheduleText, mtgTitle, location, meetingUrl, includeSignature = true } = opts;
   const company = profile.company ?? "";
   const name = profile.name;
   const greet = openingGreeting(tone, company, name);
@@ -282,10 +291,11 @@ function buildNext(opts: GenerateGreetingOptions): string {
     ? scheduleText.trim()
     : "（日程候補を貼り付けてください）";
 
-  // MTGタイトル・場所/URLブロック
+  // MTGタイトル・場所・URLブロック
   const titleLine = mtgTitle?.trim() ? `\n■件名：${mtgTitle.trim()}` : "";
-  const locationLine = location?.trim() ? `\n${locationLabel(location)}` : "";
-  const detailBlock = (titleLine || locationLine) ? `${titleLine}${locationLine}\n\n` : "";
+  const locationLine = location?.trim() ? `\n■場所：${location.trim()}` : "";
+  const urlLine = meetingUrl?.trim() ? `\n■URL：${meetingUrl.trim()}` : "";
+  const detailBlock = (titleLine || locationLine || urlLine) ? `${titleLine}${locationLine}${urlLine}\n\n` : "";
 
   if (tone === "formal") {
     return `${greet}\n\n次回のお打ち合わせ日程を設定させていただきたく、ご連絡いたしました。\n\n${detailBlock}以下の日時でご都合のよいお時間はございますでしょうか。\nお手数ですが、ご確認いただけますと幸いです。\n\n${slotsBlock}\n\nその他、ご不明点やご要望などございましたら、何なりとお申し付けくださいませ。\n${closing(tone)}${sig}`;

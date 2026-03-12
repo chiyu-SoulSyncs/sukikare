@@ -14,12 +14,11 @@ export function getApiBaseUrl(): string {
     return envUrl.replace(/\/$/, "");
   }
 
-  // On web, derive from current hostname by replacing port 8081 with 3000
+  // On web, derive from current location by replacing port with 3000
   if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
-    const { protocol, hostname } = window.location;
-    const apiHostname = hostname.replace(/^8081-/, "3000-");
-    if (apiHostname !== hostname) {
-      return `${protocol}//${apiHostname}`;
+    const { protocol, hostname, port } = window.location;
+    if (port === "8081") {
+      return `${protocol}//${hostname}:3000`;
     }
   }
 

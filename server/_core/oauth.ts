@@ -41,9 +41,14 @@ export function registerOAuthRoutes(app: Express) {
     const state = randomBytes(32).toString("hex");
 
     // Store state in a short-lived httpOnly cookie (10 minutes)
+    // Use sameSite: "none" + secure for cross-site redirect from Google,
+    // but fall back to "lax" + no secure for local HTTP development
     const cookieOptions = getSessionCookieOptions(req);
+    const isSecure = cookieOptions.secure;
     res.cookie("google_oauth_state", state, {
       ...cookieOptions,
+      sameSite: isSecure ? "none" : "lax",
+      secure: isSecure,
       maxAge: 10 * 60 * 1000, // 10 minutes
     });
 
@@ -74,6 +79,10 @@ export function registerOAuthRoutes(app: Express) {
     const storedState = cookies["google_oauth_state"];
 
     if (!state || !storedState || state !== storedState) {
+      // In local development, log the mismatch for debugging
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[OAuth] State mismatch - query:", state, "cookie:", storedState, "cookies:", req.headers.cookie);
+      }
       res.status(403).json({ error: "Invalid OAuth state parameter" });
       return;
     }
@@ -142,7 +151,13 @@ export function registerOAuthRoutes(app: Express) {
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       // Determine if this is a web browser request (not native app).
-      const isWebBrowser = req.headers["x-web-preview"] !== undefined;
+      // Check for x-web-preview header, Referer from localhost:8081, or browser User-Agent
+      const ua = req.headers["user-agent"] || "";
+      const referer = req.headers["referer"] || "";
+      const isWebBrowser =
+        req.headers["x-web-preview"] !== undefined ||
+        referer.includes("localhost:8081") ||
+        (ua.includes("Mozilla") && !ua.includes("Expo"));
 
       const APP_SCHEME = "calmate";
       if (!isWebBrowser) {

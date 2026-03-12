@@ -188,8 +188,11 @@ export default function GreetingScreen() {
   const [scheduleText, setScheduleText] = useState("");
   const [mtgTitle, setMtgTitle] = useState("");
   const [location, setLocation] = useState("");
+  const [meetingUrlNext, setMeetingUrlNext] = useState("");
+  const [meetingLocation, setMeetingLocation] = useState("");
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderLocation, setReminderLocation] = useState("");
+  const [reminderUrl, setReminderUrl] = useState("");
 
   // 次回案内シーン選択時に転送データを自動読み込み
   React.useEffect(() => {
@@ -237,6 +240,7 @@ export default function GreetingScreen() {
       purpose: meetingPurpose.trim() || undefined,
       date: meetingDate.trim() || undefined,
       time: meetingTime.trim() || undefined,
+      location: meetingLocation.trim() || undefined,
       url: meetingUrl.trim() || undefined,
       nextAction: nextAction.trim() || undefined,
       theirAction: theirAction.trim() || undefined,
@@ -249,6 +253,7 @@ export default function GreetingScreen() {
       scheduleText: scene === "next" ? (scheduleText.trim() || undefined) : undefined,
       mtgTitle: scene === "next" ? (mtgTitle.trim() || undefined) : undefined,
       location: scene === "next" ? (location.trim() || undefined) : (scene === "reminder" ? (reminderLocation.trim() || undefined) : undefined),
+      meetingUrl: scene === "next" ? (meetingUrlNext.trim() || undefined) : (scene === "reminder" ? (reminderUrl.trim() || undefined) : undefined),
       reminderTitle: scene === "reminder" ? (reminderTitle.trim() || undefined) : undefined,
       recipientName: recipientName.trim() || undefined,
       includeSignature,
@@ -261,7 +266,7 @@ export default function GreetingScreen() {
     setEditedMessage(null);
     setIsEditing(false);
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [selectedCard, scene, tone, recipientName, meetingPurpose, meetingDate, meetingTime, meetingUrl, nextAction, theirAction, scheduleText, mtgTitle, location, reminderTitle, reminderLocation, includeSignature, replyStyle, replySubtype, confirmedDate, newScheduleText]);
+  }, [selectedCard, scene, tone, recipientName, meetingPurpose, meetingDate, meetingTime, meetingLocation, meetingUrl, nextAction, theirAction, scheduleText, mtgTitle, location, meetingUrlNext, reminderTitle, reminderLocation, reminderUrl, includeSignature, replyStyle, replySubtype, confirmedDate, newScheduleText]);
 
   const displayMessage = editedMessage ?? generated;
 
@@ -328,7 +333,30 @@ export default function GreetingScreen() {
                         backgroundColor: isSelected ? c.tealLight : c.background,
                         minWidth: 100,
                       }, pressed && { opacity: 0.7 }]}
-                      onPress={() => setSelectedCardId(card.id)}
+                      onPress={() => {
+                        if (isSelected) {
+                          // Already selected: show edit/delete menu
+                          if (Platform.OS === "web") {
+                            const action = window.confirm(`「${card.label}」を編集しますか？\n（キャンセルで削除メニューを表示）`);
+                            if (action) {
+                              setEditingCard(card);
+                              setEditorVisible(true);
+                            } else {
+                              if (window.confirm(`「${card.label}」を削除しますか？`)) {
+                                deleteCard.mutate({ id: card.id });
+                              }
+                            }
+                          } else {
+                            Alert.alert(card.label, "カードを編集または削除できます", [
+                              { text: "キャンセル", style: "cancel" },
+                              { text: "編集", onPress: () => { setEditingCard(card); setEditorVisible(true); } },
+                              { text: "削除", style: "destructive", onPress: () => deleteCard.mutate({ id: card.id }) },
+                            ]);
+                          }
+                        } else {
+                          setSelectedCardId(card.id);
+                        }
+                      }}
                       onLongPress={() => {
                         Alert.alert(card.label, "カードを編集または削除できます", [
                           { text: "キャンセル", style: "cancel" },
@@ -337,7 +365,10 @@ export default function GreetingScreen() {
                         ]);
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: isSelected ? c.primary : c.foreground }}>{card.label}</Text>
+                      <View style={[st.row, { justifyContent: "space-between" }]}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: isSelected ? c.primary : c.foreground }}>{card.label}</Text>
+                        {isSelected && <IconSymbol name="pencil" size={12} color={c.primary} />}
+                      </View>
                       <Text style={{ fontSize: 11, color: c.muted, marginTop: 2 }} numberOfLines={1}>{card.name}</Text>
                     </Pressable>
                   );
@@ -484,8 +515,14 @@ export default function GreetingScreen() {
               </View>
             </View>
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, color: c.muted }}>URL</Text>
-              <TextInput value={meetingUrl} onChangeText={setMeetingUrl} placeholder="https://..." placeholderTextColor={c.muted}
+              <Text style={{ fontSize: 12, color: c.muted }}>場所</Text>
+              <TextInput value={meetingLocation} onChangeText={setMeetingLocation} placeholder="例: 〇〇会議室、本社3F" placeholderTextColor={c.muted}
+                style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]} />
+            </View>
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, color: c.muted }}>会議URL</Text>
+              <TextInput value={meetingUrl} onChangeText={setMeetingUrl} placeholder="例: https://zoom.us/j/..." placeholderTextColor={c.muted}
+                autoCapitalize="none" keyboardType="url"
                 style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]} />
             </View>
             {scene === "thanks" && (
@@ -521,49 +558,31 @@ export default function GreetingScreen() {
                 style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
               />
             </View>
-            {/* 場所/URL */}
+            {/* 場所 */}
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 12, color: c.muted }}>場所 / URL</Text>
+              <Text style={{ fontSize: 12, color: c.muted }}>場所</Text>
               <TextInput
                 value={reminderLocation}
                 onChangeText={setReminderLocation}
-                placeholder="例: Zoom https://zoom.us/... または 〇〇会議室"
+                placeholder="例: 〇〇会議室、本社3F"
                 placeholderTextColor={c.muted}
                 returnKeyType="done"
-                style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: reminderLocation ? c.primary : c.border }]}
+                style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
               />
-              {reminderLocation.length > 0 && (
-                <View style={[st.row, { gap: 6 }]}>
-                  <IconSymbol
-                    name={/^https?:\/\//i.test(reminderLocation.trim()) || /zoom\.us|teams\.microsoft\.com|meet\.google\.com|webex\.com/i.test(reminderLocation.trim()) ? "link" : "mappin"}
-                    size={13}
-                    color={c.primary}
-                  />
-                  <Text style={{ fontSize: 12, color: c.primary }}>
-                    {/^https?:\/\//i.test(reminderLocation.trim()) || /zoom\.us|teams\.microsoft\.com|meet\.google\.com|webex\.com/i.test(reminderLocation.trim())
-                      ? "「URL」として認識されます"
-                      : "「場所」として認識されます"}
-                  </Text>
-                </View>
-              )}
             </View>
-          </View>
-        )}
-
-        {/* 次回案内シーンの場所/URL自動検出フィードバック */}
-        {scene === "next" && location.length > 0 && (
-          <View style={{ paddingHorizontal: 16, marginTop: -8 }}>
-            <View style={[st.row, { gap: 6 }]}>
-              <IconSymbol
-                name={/^https?:\/\//i.test(location.trim()) || /zoom\.us|teams\.microsoft\.com|meet\.google\.com|webex\.com/i.test(location.trim()) ? "link" : "mappin"}
-                size={13}
-                color={c.primary}
+            {/* URL */}
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, color: c.muted }}>会議URL</Text>
+              <TextInput
+                value={reminderUrl}
+                onChangeText={setReminderUrl}
+                placeholder="例: https://zoom.us/j/..."
+                placeholderTextColor={c.muted}
+                returnKeyType="done"
+                autoCapitalize="none"
+                keyboardType="url"
+                style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
               />
-              <Text style={{ fontSize: 12, color: c.primary }}>
-                {/^https?:\/\//i.test(location.trim()) || /zoom\.us|teams\.microsoft\.com|meet\.google\.com|webex\.com/i.test(location.trim())
-                  ? "「URL」として認識されます"
-                  : "「場所」として認識されます"}
-              </Text>
             </View>
           </View>
         )}
@@ -650,15 +669,29 @@ export default function GreetingScreen() {
                 style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
               />
             </View>
-            {/* 場所/URL */}
+            {/* 場所 */}
             <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: c.foreground }}>場所 / URL（任意）</Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: c.foreground }}>場所（任意）</Text>
               <TextInput
                 value={location}
                 onChangeText={setLocation}
-                placeholder="例: Zoom https://zoom.us/... または 〇〇会議室"
+                placeholder="例: 〇〇会議室、本社3F"
                 placeholderTextColor={c.muted}
                 returnKeyType="done"
+                style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
+              />
+            </View>
+            {/* URL */}
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: c.foreground }}>会議URL（任意）</Text>
+              <TextInput
+                value={meetingUrlNext}
+                onChangeText={setMeetingUrlNext}
+                placeholder="例: https://zoom.us/j/..."
+                placeholderTextColor={c.muted}
+                returnKeyType="done"
+                autoCapitalize="none"
+                keyboardType="url"
                 style={[st.input, { color: c.foreground, backgroundColor: c.background, borderColor: c.border }]}
               />
             </View>
