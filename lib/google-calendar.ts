@@ -36,6 +36,12 @@ export interface GoogleEvent {
   end: { dateTime?: string; date?: string };
   status?: string;
   transparency?: string; // "transparent" = 空き時間として扱う
+  location?: string;
+  hangoutLink?: string;
+  description?: string;
+  conferenceData?: {
+    entryPoints?: { entryPointType?: string; uri?: string }[];
+  };
 }
 
 export interface FreeSlot {

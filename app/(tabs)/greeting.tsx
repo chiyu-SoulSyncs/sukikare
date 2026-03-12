@@ -20,6 +20,13 @@ import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { useAuthContext } from "@/lib/auth-context";
 import {
+  fetchEvents,
+  fetchCalendars,
+  loadSelectedCalendars,
+  checkGoogleConnection,
+  type GoogleEvent,
+} from "@/lib/google-calendar";
+import {
   generateGreeting,
   type GreetingScene,
   type GreetingTone,
@@ -196,6 +203,11 @@ export default function GreetingScreen() {
   const [reminderDay, setReminderDay] = useState<"today" | "tomorrow">("tomorrow");
   const [showReplyHelp, setShowReplyHelp] = useState(false);
 
+  // カレンダーイベント選択
+  const [calendarEvents, setCalendarEvents] = useState<GoogleEvent[]>([]);
+  const [showEventPicker, setShowEventPicker] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
   // 次回案内シーン選択時に転送データを自動読み込み
   React.useEffect(() => {
     if (scene !== "next") return;
@@ -209,6 +221,89 @@ export default function GreetingScreen() {
       } catch {}
     })();
   }, [scene]);
+
+  // カレンダーから予定を取得
+  const loadCalendarEvents = useCallback(async (day: "today" | "tomorrow") => {
+    if (!user) return;
+    setLoadingEvents(true);
+    try {
+      const connected = await checkGoogleConnection(user.googleId!);
+      if (!connected) {
+        Alert.alert("カレンダー未連携", "設定タブからGoogleカレンダーを連携してください。");
+        setLoadingEvents(false);
+        return;
+      }
+      // まず保存済みのカレンダーIDを試す。なければ全カレンダーを取得
+      let calIds = await loadSelectedCalendars(user.googleId!);
+      if (calIds.length <= 1 && calIds[0] === "primary") {
+        try {
+          const allCals = await fetchCalendars(user.googleId!);
+          if (allCals.length > 0) {
+            calIds = allCals.map(c => c.id);
+            if (__DEV__) console.log("[Greeting] Using all calendars:", calIds);
+          }
+        } catch {}
+      }
+      const now = new Date();
+      const targetDate = new Date(now);
+      if (day === "tomorrow") targetDate.setDate(targetDate.getDate() + 1);
+      const timeMin = new Date(targetDate);
+      timeMin.setHours(0, 0, 0, 0);
+      const timeMax = new Date(targetDate);
+      timeMax.setHours(23, 59, 59, 999);
+      const events = await fetchEvents(user.googleId!, calIds, timeMin, timeMax);
+      // Filter out cancelled/transparent and sort by start time
+      const filtered = events
+        .filter(ev => ev.status !== "cancelled" && ev.transparency !== "transparent" && ev.start.dateTime)
+        .sort((a, b) => new Date(a.start.dateTime!).getTime() - new Date(b.start.dateTime!).getTime());
+      setCalendarEvents(filtered);
+      setShowEventPicker(true);
+    } catch {
+      Alert.alert("エラー", "カレンダーの予定を取得できませんでした。");
+    }
+    setLoadingEvents(false);
+  }, [user]);
+
+  // イベント選択時にフィールドに自動入力
+  const handleSelectEvent = useCallback((event: GoogleEvent) => {
+    // タイトル
+    setReminderTitle(event.summary || "");
+    // 日時
+    if (event.start.dateTime) {
+      const start = new Date(event.start.dateTime);
+      const month = start.getMonth() + 1;
+      const day = start.getDate();
+      const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+      const weekday = weekdays[start.getDay()];
+      setMeetingDate(`${month}月${day}日（${weekday}）`);
+
+      const startH = start.getHours();
+      const startM = start.getMinutes().toString().padStart(2, "0");
+      if (event.end.dateTime) {
+        const end = new Date(event.end.dateTime);
+        const endH = end.getHours();
+        const endM = end.getMinutes().toString().padStart(2, "0");
+        setMeetingTime(`${startH}:${startM}〜${endH}:${endM}`);
+      } else {
+        setMeetingTime(`${startH}:${startM}`);
+      }
+    }
+    // 場所
+    setReminderLocation(event.location || "");
+    // URL: hangoutLink > conferenceData > description内のURL
+    let url = event.hangoutLink || "";
+    if (!url && event.conferenceData?.entryPoints) {
+      const videoEntry = event.conferenceData.entryPoints.find(e => e.entryPointType === "video");
+      if (videoEntry?.uri) url = videoEntry.uri;
+    }
+    if (!url && event.description) {
+      const urlMatch = event.description.match(/https?:\/\/[^\s<>"]+/);
+      if (urlMatch) url = urlMatch[0];
+    }
+    setReminderUrl(url);
+    setShowEventPicker(false);
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
 
   // 署名・返信スタイル
   const [includeSignature, setIncludeSignature] = useState(true);
@@ -611,6 +706,24 @@ export default function GreetingScreen() {
                 );
               })}
             </View>
+            {/* カレンダーから選択ボタン */}
+            {user && (
+              <Pressable
+                style={({ pressed }) => [st.row, {
+                  gap: 8, justifyContent: "center",
+                  paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed",
+                  borderColor: c.primary, backgroundColor: c.tealLight,
+                }, pressed && { opacity: 0.7 }]}
+                onPress={() => loadCalendarEvents(reminderDay)}
+                disabled={loadingEvents}
+              >
+                <IconSymbol name="calendar" size={18} color={c.primary} />
+                <Text style={{ fontSize: 13, fontWeight: "700", color: c.primary }}>
+                  {loadingEvents ? "読み込み中..." : "カレンダーから選択"}
+                </Text>
+              </Pressable>
+            )}
+
             <Text style={{ fontSize: 14, fontWeight: "700", color: c.foreground, marginTop: 4 }}>MTG情報（任意）</Text>
             {/* MTGタイトル */}
             <View style={{ gap: 6 }}>
@@ -886,6 +999,70 @@ export default function GreetingScreen() {
         )}
 
       </ScrollView>
+
+      {/* カレンダーイベント選択モーダル */}
+      <Modal visible={showEventPicker} transparent animationType="fade" onRequestClose={() => setShowEventPicker(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" }} onPress={() => setShowEventPicker(false)}>
+          <Pressable style={{ backgroundColor: c.surface, borderRadius: 20, maxHeight: "70%", width: Platform.OS === "web" ? 370 : "92%", paddingBottom: 16 }} onPress={() => {}}>
+            <View style={[st.row, { justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: c.border }]}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: c.foreground }}>
+                {reminderDay === "today" ? "今日" : "明日"}の予定
+              </Text>
+              <Pressable
+                style={({ pressed }) => [{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}
+                onPress={() => setShowEventPicker(false)}
+              >
+                <Text style={{ fontSize: 13, color: c.primary, fontWeight: "600" }}>閉じる</Text>
+              </Pressable>
+            </View>
+            {calendarEvents.length === 0 ? (
+              <View style={{ padding: 40, alignItems: "center" }}>
+                <IconSymbol name="calendar.badge.exclamationmark" size={40} color={c.muted} />
+                <Text style={{ fontSize: 14, color: c.muted, marginTop: 12 }}>予定がありません</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={calendarEvents}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 12 }}
+                ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+                renderItem={({ item }) => {
+                  const start = item.start.dateTime ? new Date(item.start.dateTime) : null;
+                  const end = item.end.dateTime ? new Date(item.end.dateTime) : null;
+                  const timeStr = start
+                    ? `${start.getHours()}:${start.getMinutes().toString().padStart(2, "0")}` +
+                      (end ? `〜${end.getHours()}:${end.getMinutes().toString().padStart(2, "0")}` : "")
+                    : "終日";
+                  return (
+                    <Pressable
+                      style={({ pressed }) => [{
+                        flexDirection: "row", alignItems: "center", gap: 12,
+                        padding: 14, borderRadius: 14, borderWidth: 1,
+                        borderColor: c.border, backgroundColor: c.background,
+                      }, pressed && { opacity: 0.7, backgroundColor: c.tealLight }]}
+                      onPress={() => handleSelectEvent(item)}
+                    >
+                      <View style={{ width: 56, alignItems: "center" }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: c.primary, textAlign: "center" }}>{timeStr.split("〜")[0]}</Text>
+                        {timeStr.includes("〜") && (
+                          <Text style={{ fontSize: 11, color: c.muted }}>〜{timeStr.split("〜")[1]}</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: c.foreground }} numberOfLines={1}>{item.summary || "（タイトルなし）"}</Text>
+                        {item.location && (
+                          <Text style={{ fontSize: 11, color: c.muted, marginTop: 2 }} numberOfLines={1}>{item.location}</Text>
+                        )}
+                      </View>
+                      <IconSymbol name="chevron.right" size={14} color={c.muted} />
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* プロフィールカード編集モーダル */}
       <CardEditor

@@ -262,9 +262,9 @@ function buildReminder(opts: GenerateGreetingOptions): string {
 
   if (tone === "formal") {
     const intro = reminderDay === "today"
-      ? `${dayLabel}のお打ち合わせについて、確認のご連絡を申し上げます。`
+      ? `${dayLabel}の打ち合わせについてご案内いたします。`
       : `お日にちが近づいてまいりましたので、${dayLabel}のお打ち合わせについてご連絡いたします。`;
-    let body = `${greet}\n\n${intro}\n下記の通りご確認くださいますようお願いいたします。`;
+    let body = `${greet}\n\n${intro}`;
     const block = detailBlock(location, meetingUrl, reminderTitle);
     if (block) body += `\n\n${block}`;
     body += `\n\n${dayLabel}はどうぞよろしくお願いいたします。${sig}`;
