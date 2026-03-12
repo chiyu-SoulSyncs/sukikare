@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import path from "path";
+import { fileURLToPath } from "url";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleCalendarRoutes } from "../google-calendar";
@@ -73,6 +75,19 @@ async function startServer() {
       createContext,
     }),
   );
+
+  // Production: serve Expo web build as static files
+  if (process.env.NODE_ENV === "production") {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const webBuildPath = path.join(__dirname, "..", "dist-web");
+    app.use(express.static(webBuildPath));
+    // SPA fallback: serve index.html for non-API routes
+    app.get("*", (req, res) => {
+      if (!req.path.startsWith("/api/")) {
+        res.sendFile(path.join(webBuildPath, "index.html"));
+      }
+    });
+  }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
