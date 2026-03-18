@@ -53,6 +53,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="help"
+        options={{
+          title: "ヘルプ",
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="info.circle" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: "設定",

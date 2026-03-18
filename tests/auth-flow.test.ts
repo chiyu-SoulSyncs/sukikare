@@ -30,7 +30,7 @@ vi.mock("@/lib/_core/api", () => ({
 // Mock @/constants/oauth
 vi.mock("@/constants/oauth", () => ({
   SESSION_TOKEN_KEY: "app_session_token",
-  USER_INFO_KEY: "calmate-user-info",
+  USER_INFO_KEY: "sukikare-user-info",
 }));
 
 import * as SecureStore from "expo-secure-store";
@@ -93,7 +93,7 @@ describe("Auth utilities", () => {
     };
     await Auth.setUserInfo(mockUser);
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-      "calmate-user-info",
+      "sukikare-user-info",
       expect.stringContaining("test@example.com")
     );
   });
@@ -101,7 +101,7 @@ describe("Auth utilities", () => {
   it("clearUserInfo removes user from SecureStore", async () => {
     vi.mocked(SecureStore.deleteItemAsync).mockResolvedValue(undefined);
     await Auth.clearUserInfo();
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("calmate-user-info");
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("sukikare-user-info");
   });
 
   it("removeSessionToken removes token from SecureStore", async () => {
@@ -131,7 +131,7 @@ describe("Google Calendar auth flow", () => {
   it("startGoogleAuth returns true when openAuthSessionAsync returns success with googleConnected=true", () => {
     const mockResult = {
       type: "success",
-      url: "calmate://google-callback?googleConnected=true&userId=1",
+      url: "sukikare://google-callback?googleConnected=true&userId=1",
     };
     const match = mockResult.url.match(/[?&]googleConnected=([^&]+)/);
     const success = mockResult.type === "success" && match !== null && match[1] === "true";

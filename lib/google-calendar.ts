@@ -83,7 +83,7 @@ export async function startGoogleAuth(userId: string): Promise<boolean> {
 
   // Native: expo-web-browserを使用してシステムブラウザで認証
   // コールバック後にアプリのディープリンクにリダイレクトされる
-  const APP_SCHEME = "calmate";
+  const APP_SCHEME = "sukikare";
   const appRedirectUri = `${APP_SCHEME}://google-callback`;
 
   const startUrl = `${base}/api/oauth/google/start?userId=${encodeURIComponent(userId)}&appRedirect=${encodeURIComponent(appRedirectUri)}`;

@@ -5,7 +5,7 @@ import type { ExpoConfig } from "expo/config";
 const env = {
   appName: "スキカレ",
   appSlug: "calmate",
-  scheme: "calmate",
+  scheme: "sukikare",
   iosBundleId: "com.chiyusoulsyncs.calmate",
   androidPackage: "com.chiyusoulsyncs.calmate",
 };

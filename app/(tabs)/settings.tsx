@@ -223,7 +223,14 @@ export default function SettingsScreen() {
                 <IconSymbol name="person.fill" size={24} color={c.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: "600", color: c.foreground }}>{user?.name ?? "ユーザー"}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: c.foreground }}>{user?.name ?? "ユーザー"}</Text>
+                  {user?.role === "admin" && (
+                    <View style={{ backgroundColor: c.primary, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: "#fff" }}>管理者</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={{ fontSize: 13, color: c.muted }}>{user?.email ?? ""}</Text>
               </View>
             </View>

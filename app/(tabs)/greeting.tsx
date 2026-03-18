@@ -264,18 +264,21 @@ export default function GreetingScreen() {
     setLoadingEvents(false);
   }, [user]);
 
+  // Which scene triggered the event picker
+  const [eventPickerScene, setEventPickerScene] = useState<GreetingScene>("reminder");
+
   // イベント選択時にフィールドに自動入力
   const handleSelectEvent = useCallback((event: GoogleEvent) => {
-    // タイトル
-    setReminderTitle(event.summary || "");
-    // 日時
+    // 日時を共通で計算
+    let dateStr = "";
+    let timeStr = "";
     if (event.start.dateTime) {
       const start = new Date(event.start.dateTime);
       const month = start.getMonth() + 1;
       const day = start.getDate();
       const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
       const weekday = weekdays[start.getDay()];
-      setMeetingDate(`${month}月${day}日（${weekday}）`);
+      dateStr = `${month}月${day}日（${weekday}）`;
 
       const startH = start.getHours();
       const startM = start.getMinutes().toString().padStart(2, "0");
@@ -283,13 +286,12 @@ export default function GreetingScreen() {
         const end = new Date(event.end.dateTime);
         const endH = end.getHours();
         const endM = end.getMinutes().toString().padStart(2, "0");
-        setMeetingTime(`${startH}:${startM}〜${endH}:${endM}`);
+        timeStr = `${startH}:${startM}〜${endH}:${endM}`;
       } else {
-        setMeetingTime(`${startH}:${startM}`);
+        timeStr = `${startH}:${startM}`;
       }
     }
-    // 場所
-    setReminderLocation(event.location || "");
+
     // URL: hangoutLink > conferenceData > description内のURL
     let url = event.hangoutLink || "";
     if (!url && event.conferenceData?.entryPoints) {
@@ -300,10 +302,26 @@ export default function GreetingScreen() {
       const urlMatch = event.description.match(/https?:\/\/[^\s<>"]+/);
       if (urlMatch) url = urlMatch[0];
     }
-    setReminderUrl(url);
+
+    if (eventPickerScene === "thanks") {
+      // お礼シーン: thanks用フィールドに入力
+      setMeetingPurpose(event.summary || "");
+      setMeetingDate(dateStr);
+      setMeetingTime(timeStr);
+      setMeetingLocation(event.location || "");
+      setMeetingUrl(url);
+    } else {
+      // リマインドシーン: reminder用フィールドに入力
+      setReminderTitle(event.summary || "");
+      setMeetingDate(dateStr);
+      setMeetingTime(timeStr);
+      setReminderLocation(event.location || "");
+      setReminderUrl(url);
+    }
+
     setShowEventPicker(false);
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, []);
+  }, [eventPickerScene]);
 
   // 署名・返信スタイル
   const [includeSignature, setIncludeSignature] = useState(true);
@@ -637,6 +655,26 @@ export default function GreetingScreen() {
         {needsMeeting && (
           <View style={[st.card, { backgroundColor: c.surface, borderColor: c.border, gap: 12 }]}>
             <Text style={{ fontSize: 14, fontWeight: "700", color: c.foreground }}>会議情報（任意）</Text>
+            {/* カレンダーから選択ボタン（thanksシーン） */}
+            {user && (
+              <Pressable
+                style={({ pressed }) => [st.row, {
+                  gap: 8, justifyContent: "center",
+                  paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed",
+                  borderColor: c.primary, backgroundColor: c.tealLight,
+                }, pressed && { opacity: 0.7 }]}
+                onPress={() => {
+                  setEventPickerScene("thanks");
+                  loadCalendarEvents("today");
+                }}
+                disabled={loadingEvents}
+              >
+                <IconSymbol name="calendar" size={18} color={c.primary} />
+                <Text style={{ fontSize: 13, fontWeight: "700", color: c.primary }}>
+                  {loadingEvents ? "読み込み中..." : "カレンダーから選択"}
+                </Text>
+              </Pressable>
+            )}
             <View style={{ gap: 6 }}>
               <Text style={{ fontSize: 12, color: c.muted }}>目的</Text>
               <TextInput value={meetingPurpose} onChangeText={setMeetingPurpose} placeholder="例: 進捗のご報告" placeholderTextColor={c.muted}
@@ -714,7 +752,10 @@ export default function GreetingScreen() {
                   paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed",
                   borderColor: c.primary, backgroundColor: c.tealLight,
                 }, pressed && { opacity: 0.7 }]}
-                onPress={() => loadCalendarEvents(reminderDay)}
+                onPress={() => {
+                  setEventPickerScene("reminder");
+                  loadCalendarEvents(reminderDay);
+                }}
                 disabled={loadingEvents}
               >
                 <IconSymbol name="calendar" size={18} color={c.primary} />
@@ -1006,7 +1047,7 @@ export default function GreetingScreen() {
           <Pressable style={{ backgroundColor: c.surface, borderRadius: 20, maxHeight: "70%", width: Platform.OS === "web" ? 370 : "92%", paddingBottom: 16 }} onPress={() => {}}>
             <View style={[st.row, { justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: c.border }]}>
               <Text style={{ fontSize: 16, fontWeight: "700", color: c.foreground }}>
-                {reminderDay === "today" ? "今日" : "明日"}の予定
+                {eventPickerScene === "thanks" ? "今日" : reminderDay === "today" ? "今日" : "明日"}の予定
               </Text>
               <Pressable
                 style={({ pressed }) => [{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: c.tealLight }, pressed && { opacity: 0.7 }]}

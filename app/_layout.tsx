@@ -2,8 +2,8 @@ import "@/global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useMemo, useState } from "react";
-import { Platform, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import "@/lib/_core/nativewind-pressable";
@@ -25,6 +25,20 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
+  // Detect ?error=not_invited on web and show alert
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get("error");
+      if (error === "not_invited") {
+        window.history.replaceState({}, "", window.location.pathname);
+        Alert.alert(
+          "アクセス制限",
+          "このアカウントは招待されていません。管理者にお問い合わせください。"
+        );
+      }
+    }
+  }, []);
   const initialInsets = initialWindowMetrics?.insets ?? DEFAULT_WEB_INSETS;
   const initialFrame = initialWindowMetrics?.frame ?? DEFAULT_WEB_FRAME;
 

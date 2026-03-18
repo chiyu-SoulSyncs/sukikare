@@ -132,13 +132,15 @@ export function registerOAuthRoutes(app: Express) {
       const name = (userinfo.name as string) || "";
       const email = (userinfo.email as string) || null;
 
-      // Check if user is already registered or email is invited
+      // Check if user's email is in the allowedEmails list
+      // Existing admins bypass this check; all other users must be invited
       const existingUser = await getUserByOpenId(googleId);
-      if (!existingUser && email) {
+      const isAdmin = existingUser?.role === "admin";
+      if (!isAdmin && email) {
         const allowed = await isEmailAllowed(email);
         if (!allowed) {
           // Not invited - show error
-          const APP_SCHEME = "calmate";
+          const APP_SCHEME = "sukikare";
           const ua = req.headers["user-agent"] || "";
           const referer = req.headers["referer"] || "";
           const isWebBrowser =
@@ -189,9 +191,9 @@ export function registerOAuthRoutes(app: Express) {
         referer.includes("localhost:8081") ||
         (ua.includes("Mozilla") && !ua.includes("Expo"));
 
-      const APP_SCHEME = "calmate";
+      const APP_SCHEME = "sukikare";
       if (!isWebBrowser) {
-        // Native app: redirect to calmate deep link
+        // Native app: redirect to sukikare deep link
         const userBase64 = Buffer.from(JSON.stringify(buildUserResponse(user))).toString("base64");
         const deepLinkUrl = new URL(`${APP_SCHEME}://oauth/callback`);
         deepLinkUrl.searchParams.set("sessionToken", sessionToken);

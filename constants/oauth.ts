@@ -2,7 +2,7 @@ import * as ReactNative from "react-native";
 import * as WebBrowser from "expo-web-browser";
 
 export const SESSION_TOKEN_KEY = "app_session_token";
-export const USER_INFO_KEY = "calmate-user-info";
+export const USER_INFO_KEY = "sukikare-user-info";
 
 /**
  * Get the API base URL, deriving from current hostname if not set.
@@ -37,7 +37,7 @@ export function getGoogleLoginUrl(apiBaseUrl: string): string {
  * Start Google OAuth login flow.
  *
  * On web: redirects to the server's Google OAuth endpoint.
- * On native: uses expo-web-browser openAuthSessionAsync with calmate:// deep link scheme.
+ * On native: uses expo-web-browser openAuthSessionAsync with sukikare:// deep link scheme.
  *
  * @returns { sessionToken, userBase64 } on native success, null otherwise.
  */
@@ -57,12 +57,12 @@ export async function startGoogleLogin(): Promise<{
 
   // Native: use expo-web-browser to open the system browser for Google OAuth
   try {
-    const redirectUri = "calmate://oauth/callback";
+    const redirectUri = "sukikare://oauth/callback";
     const result = await WebBrowser.openAuthSessionAsync(loginUrl, redirectUri);
 
     if (result.type === "success" && result.url) {
       // Parse sessionToken and user from the deep link URL
-      // URL format: calmate://oauth/callback?sessionToken=...&user=...
+      // URL format: sukikare://oauth/callback?sessionToken=...&user=...
       try {
         const url = new URL(result.url);
         const sessionToken = url.searchParams.get("sessionToken");

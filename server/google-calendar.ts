@@ -116,12 +116,12 @@ export function registerGoogleCalendarRoutes(app: Express) {
 
     const appRedirect = req.query.appRedirect as string | undefined;
 
-    // Validate appRedirect to only allow calmate:// scheme
+    // Validate appRedirect to only allow sukikare:// scheme
     if (appRedirect) {
       try {
         const redirectUrl = new URL(appRedirect);
-        if (redirectUrl.protocol !== "calmate:") {
-          res.status(400).json({ error: "Invalid appRedirect scheme, only calmate:// is allowed" });
+        if (redirectUrl.protocol !== "sukikare:") {
+          res.status(400).json({ error: "Invalid appRedirect scheme, only sukikare:// is allowed" });
           return;
         }
       } catch {
