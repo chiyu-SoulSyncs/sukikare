@@ -227,7 +227,7 @@ export default function GreetingScreen() {
     if (!user) return;
     setLoadingEvents(true);
     try {
-      const connected = await checkGoogleConnection(user.googleId!);
+      const connected = await checkGoogleConnection();
       if (!connected) {
         Alert.alert("カレンダー未連携", "設定タブからGoogleカレンダーを連携してください。");
         setLoadingEvents(false);
@@ -237,7 +237,7 @@ export default function GreetingScreen() {
       let calIds = await loadSelectedCalendars(user.googleId!);
       if (calIds.length <= 1 && calIds[0] === "primary") {
         try {
-          const allCals = await fetchCalendars(user.googleId!);
+          const allCals = await fetchCalendars();
           if (allCals.length > 0) {
             calIds = allCals.map(c => c.id);
             if (__DEV__) console.log("[Greeting] Using all calendars:", calIds);
@@ -251,7 +251,7 @@ export default function GreetingScreen() {
       timeMin.setHours(0, 0, 0, 0);
       const timeMax = new Date(targetDate);
       timeMax.setHours(23, 59, 59, 999);
-      const events = await fetchEvents(user.googleId!, calIds, timeMin, timeMax);
+      const events = await fetchEvents(calIds, timeMin, timeMax);
       // Filter out cancelled/transparent and sort by start time
       const filtered = events
         .filter(ev => ev.status !== "cancelled" && ev.transparency !== "transparent" && ev.start.dateTime)

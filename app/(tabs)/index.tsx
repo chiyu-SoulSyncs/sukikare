@@ -117,7 +117,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (isAuthenticated && user) {
       setCheckingGoogle(true);
-      checkGoogleConnection(String(user.id))
+      checkGoogleConnection()
         .then(setGoogleConnected)
         .finally(() => setCheckingGoogle(false));
     }
@@ -151,7 +151,7 @@ export default function HomeScreen() {
 
   const handleConnectGoogle = useCallback(async () => {
     if (!user) { router.push("/login" as any); return; }
-    const success = await startGoogleAuth(String(user.id));
+    const success = await startGoogleAuth(Platform.OS !== "web" ? String(user.id) : undefined);
     if (success) {
       setGoogleConnected(true);
     }
@@ -200,7 +200,7 @@ export default function HomeScreen() {
       ]);
       const timeMin = new Date(weekDatesForSearch[0]); timeMin.setHours(0, 0, 0, 0);
       const timeMax = new Date(weekDatesForSearch[weekDatesForSearch.length - 1]); timeMax.setHours(23, 59, 59, 999);
-      const events = await fetchEvents(String(user.id), calendarIds, timeMin, timeMax);
+      const events = await fetchEvents(calendarIds, timeMin, timeMax);
       const slots = extractFreeSlots(weekDatesForSearch, events, { ...quickSettings, excludedWeekdays: exclusion.excludedWeekdays, excludedTimeRanges: exclusion.excludedTimeRanges });
       await AsyncStorage.setItem("search_results", JSON.stringify({
         slots: slots.map((s) => ({ start: s.start.toISOString(), end: s.end.toISOString(), durationMinutes: s.durationMinutes })),
@@ -245,7 +245,7 @@ export default function HomeScreen() {
       const timeMax = new Date(datesToSearch[datesToSearch.length - 1]);
       timeMax.setHours(23, 59, 59, 999);
 
-      const events = await fetchEvents(String(user.id), calendarIds, timeMin, timeMax);
+      const events = await fetchEvents(calendarIds, timeMin, timeMax);
       const slots = extractFreeSlots(datesToSearch, events, { ...settings, excludedWeekdays: exclusion.excludedWeekdays, excludedTimeRanges: exclusion.excludedTimeRanges });
 
       await AsyncStorage.setItem(

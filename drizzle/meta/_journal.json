@@ -15,6 +15,13 @@
       "when": 1772626643538,
       "tag": "0001_unknown_layla_miller",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1774022400000,
+      "tag": "0002_add_allowed_emails",
+      "breakpoints": true
     }
   ]
 }

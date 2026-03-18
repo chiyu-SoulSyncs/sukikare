@@ -211,54 +211,6 @@ export function registerGoogleCalendarRoutes(app: Express) {
     }
   });
 
-  /**
-   * Save access token from client-side OAuth (expo-auth-session)
-   * Used by Expo Go / native builds where the token is obtained on the client
-   */
-  app.post("/api/google/save-token", async (req: Request, res: Response) => {
-    let userId: string;
-    try {
-      const user = await sdk.authenticateRequest(req);
-      userId = user.openId;
-    } catch {
-      res.status(401).json({ error: "Authentication required" });
-      return;
-    }
-
-    const { accessToken } = req.body;
-
-    if (!accessToken) {
-      res.status(400).json({ error: "accessToken required" });
-      return;
-    }
-
-    // Verify the token is valid by calling Google's tokeninfo endpoint
-    try {
-      const verifyRes = await fetch(
-        `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`
-      );
-      if (!verifyRes.ok) {
-        res.status(401).json({ error: "Invalid access token" });
-        return;
-      }
-      const tokenInfo = await verifyRes.json();
-      // exp is a Unix timestamp (seconds)
-      const expSeconds = parseInt(tokenInfo.exp ?? "0", 10);
-      const expiresAt = expSeconds > 0
-        ? expSeconds * 1000  // Unix timestamp (seconds) -> ms
-        : Date.now() + 3600 * 1000;  // fallback: 1 hour
-
-      await setGoogleTokenForUser(userId, {
-        accessToken,
-        expiresAt,
-      });
-
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to save token" });
-    }
-  });
-
   // Check Google connection status
   app.get("/api/google/status", async (req: Request, res: Response) => {
     let userId: string;

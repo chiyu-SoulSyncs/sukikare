@@ -133,10 +133,11 @@ export function registerOAuthRoutes(app: Express) {
       const email = (userinfo.email as string) || null;
 
       // Check if user's email is in the allowedEmails list
-      // Existing admins bypass this check; all other users must be invited
+      // Existing admins and ADMIN_EMAIL bypass this check; all other users must be invited
       const existingUser = await getUserByOpenId(googleId);
       const isAdmin = existingUser?.role === "admin";
-      if (!isAdmin && email) {
+      const isEnvAdmin = ENV.adminEmail && email && email.toLowerCase() === ENV.adminEmail.toLowerCase();
+      if (!isAdmin && !isEnvAdmin && email) {
         const allowed = await isEmailAllowed(email);
         if (!allowed) {
           // Not invited - show error

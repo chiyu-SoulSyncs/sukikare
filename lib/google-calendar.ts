@@ -52,9 +52,9 @@ export interface FreeSlot {
 
 // ---- API calls ----
 
-export async function checkGoogleConnection(userId: string): Promise<boolean> {
+export async function checkGoogleConnection(): Promise<boolean> {
   try {
-    const res = await authFetch(`${apiBase()}/api/google/status?userId=${encodeURIComponent(userId)}`);
+    const res = await authFetch(`${apiBase()}/api/google/status`);
     const data = await res.json();
     return data.connected === true;
   } catch {
@@ -71,22 +71,24 @@ export async function checkGoogleConnection(userId: string): Promise<boolean> {
  *
  * @returns Promise<boolean> - 認証が成功したかどうか（native のみ有効）
  */
-export async function startGoogleAuth(userId: string): Promise<boolean> {
+export async function startGoogleAuth(nativeUserId?: string): Promise<boolean> {
   const base = apiBase();
 
   if (Platform.OS === "web") {
     // Web: サーバーサイドOAuthフロー（リダイレクト）
-    // サーバーが直接リダイレクトするので、window.location.hrefで遷移
-    window.location.href = `${base}/api/oauth/google/start?userId=${encodeURIComponent(userId)}`;
+    // cookieが自動送信されるのでuserIdは不要
+    window.location.href = `${base}/api/oauth/google/start`;
     return false; // リダイレクトするので戻り値は意味なし
   }
 
   // Native: expo-web-browserを使用してシステムブラウザで認証
-  // コールバック後にアプリのディープリンクにリダイレクトされる
+  // システムブラウザはアプリのcookie/Bearerトークンを共有しないため、userIdをクエリに渡す
   const APP_SCHEME = "sukikare";
   const appRedirectUri = `${APP_SCHEME}://google-callback`;
 
-  const startUrl = `${base}/api/oauth/google/start?userId=${encodeURIComponent(userId)}&appRedirect=${encodeURIComponent(appRedirectUri)}`;
+  const params = new URLSearchParams({ appRedirect: appRedirectUri });
+  if (nativeUserId) params.set("userId", nativeUserId);
+  const startUrl = `${base}/api/oauth/google/start?${params}`;
 
   try {
     const result = await WebBrowser.openAuthSessionAsync(startUrl, appRedirectUri);
@@ -107,29 +109,25 @@ export async function startGoogleAuth(userId: string): Promise<boolean> {
   }
 }
 
-export async function disconnectGoogle(userId: string): Promise<void> {
+export async function disconnectGoogle(): Promise<void> {
   await authFetch(`${apiBase()}/api/google/disconnect`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
   });
 }
 
-export async function fetchCalendars(userId: string): Promise<GoogleCalendar[]> {
-  const res = await authFetch(`${apiBase()}/api/google/calendars?userId=${encodeURIComponent(userId)}`);
+export async function fetchCalendars(): Promise<GoogleCalendar[]> {
+  const res = await authFetch(`${apiBase()}/api/google/calendars`);
   if (!res.ok) throw new Error("Failed to fetch calendars");
   const data = await res.json();
   return data.calendars ?? [];
 }
 
 export async function fetchEvents(
-  userId: string,
   calendarIds: string[],
   timeMin: Date,
   timeMax: Date
 ): Promise<GoogleEvent[]> {
   const params = new URLSearchParams({
-    userId,
     calendarIds: calendarIds.join(","),
     timeMin: timeMin.toISOString(),
     timeMax: timeMax.toISOString(),

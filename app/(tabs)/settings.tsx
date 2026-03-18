@@ -109,12 +109,12 @@ export default function SettingsScreen() {
     if (!user) return;
     setCheckingGoogle(true);
     try {
-      const connected = await checkGoogleConnection(String(user.id));
+      const connected = await checkGoogleConnection();
       setGoogleConnected(connected);
       if (connected) {
         setLoadingCalendars(true);
         const [cals, savedIds] = await Promise.all([
-          fetchCalendars(String(user.id)),
+          fetchCalendars(),
           loadSelectedCalendars(String(user.id)),
         ]);
         setCalendars(cals);
@@ -144,7 +144,7 @@ export default function SettingsScreen() {
 
   const handleConnectGoogle = useCallback(async () => {
     if (!user) return;
-    const success = await startGoogleAuth(String(user.id));
+    const success = await startGoogleAuth(Platform.OS !== "web" ? String(user.id) : undefined);
     if (success) await loadData();
   }, [user, loadData]);
 
@@ -152,7 +152,7 @@ export default function SettingsScreen() {
     if (!user) return;
     const doDisconnect = async () => {
       if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      await disconnectGoogle(String(user.id));
+      await disconnectGoogle();
       setGoogleConnected(false);
       setCalendars([]);
     };

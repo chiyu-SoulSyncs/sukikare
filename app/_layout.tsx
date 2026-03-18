@@ -34,7 +34,7 @@ export default function RootLayout() {
         window.history.replaceState({}, "", window.location.pathname);
         Alert.alert(
           "アクセス制限",
-          "このアカウントは招待されていません。管理者にお問い合わせください。"
+          "このアカウントは招待されていません。\n\n利用するには管理者から招待メールアドレスの登録が必要です。管理者にGoogleアカウントのメールアドレスをお伝えください。"
         );
       }
     }
